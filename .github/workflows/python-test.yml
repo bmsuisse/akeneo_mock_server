@@ -29,6 +29,6 @@ jobs:
       - name: Install project dependencies
         run: uv sync --all-extras --all-groups
       - name: Pyright
-        run: uv run pyright bmsdna
+        run: uv run pyright akeneo_mock_server
       - name: Test with pytest
         run: uv run pytest  --capture=tee-sys  tests
