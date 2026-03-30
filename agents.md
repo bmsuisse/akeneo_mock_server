@@ -5,7 +5,7 @@ Hello, fellow AI Agent! If you are reading this, you are working in the `MockAke
 ## 🚨 CRITICAL DIRECTIVES 🚨
 
 1. **Test-Driven Development**: You MUST run tests before committing.
-   - Run **logic tests**: `uv run pytest tests/test_api.py -v`
+   - Run **logic tests**: `uv run pytest tests/test_api.py`
    - Run **API contract tests** (Schemathesis): `make test-contract`
    - Run **formatting & typing**: `make check`
 2. **Zero Failures**: The API currently has 0 contract validation failures against `pim-api-docs/content/swagger/akeneo-web-api.json`. **Do not merge or commit code that reintroduces Schemathesis failures.**
