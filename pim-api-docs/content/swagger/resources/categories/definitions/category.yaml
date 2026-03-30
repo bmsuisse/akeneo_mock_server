@@ -1,0 +1,91 @@
+type: object
+required: ["code"]
+properties:
+  code:
+    type: string
+    description: Category code
+    x-immutable: true
+  parent:
+    type: string
+    description: Category code of the parent's category
+    x-validation-rules: "&bull; It is either equal to `null` or to an existing category code. &#10;&bull; If equal to an existing category code, it cannot reference itself."
+    default: "null"
+  updated:
+    type: string
+    description: Date of the last update
+    format: dateTime
+    x-read-only: true
+  position:
+    type: integer
+    description: Position of the category in its level, start from 1 (only available since the 7.0 version and when query parameter "with_position" is set to "true")
+    x-read-only: true
+  labels:
+    type: object
+    description: Category labels for each locale
+    x-validation-rules: The `localeCode` is the code of an existing and activated locale
+    default: {}
+    properties:
+      localeCode:
+        type: string
+        description: Category label for the locale `localeCode`
+  values:
+    type: object
+    description: Attribute values
+    default: null
+    properties:
+      attributeCode|attributeUuid|channelCode|localeCode:
+        type: object
+        properties:
+          data:
+            type: object
+            description: Attribute value
+          type:
+            type: string
+            description: The attribute type
+          locale:
+            type: string
+            description: <a href='api-reference-paas.html#Locale'>Locale</a> code of the attribute value
+          channel:
+            type: string
+            description: <a href='api-reference-paas.html#Channel'>Channel</a> code of the attribute value
+          attribute_code:
+            type: string
+            description: The attribute code with its uuid (attributeCode|attributeUuid)
+  channel_requirements:
+    type: array
+    description: List of <a href='api-reference-paas.html#Channel'>Channel</a> codes on which the category tree is required for products completeness. Only category trees can be required, not child categories.
+    items:
+      type: string
+example: {
+  "code": "winter_collection",
+  "parent": null,
+  "updated": "2021-05-22T12:48:00+02:00",
+  "position": 1,
+  "labels": {
+    "en_US": "Winter collection",
+    "fr_FR": "Collection hiver"
+  },
+  "values": {
+    "description|96b88bf4-c2b7-4b64-a1f9-5d4876c02c26|ecommerce|en_US": {
+      "data": "<p>Winter collection description</p>\n",
+      "type": "textarea",
+      "channel": "ecommerce",
+      "locale": "en_US",
+      "attribute_code": "description|96b88bf4-c2b7-4b64-a1f9-5d4876c02c26"
+    },
+    "image_1|871b8686-79b5-415c-9c6f-a38f8732dfb7|ecommerce|en_US": {
+      "data": {
+        "size": 1401359,
+        "extension": "jpg",
+        "file_path": "2/d/c/7/2dc791671d726e7438219d5dc7fd51a53d6bf2bb_IMG_7860.jpg",
+        "mime_type": "image/jpeg",
+        "original_filename": "IMG_7860.jpg"
+      },
+      "type": "image",
+      "channel": "ecommerce",
+      "locale": "en_US",
+      "attribute_code": "image_1|871b8686-79b5-415c-9c6f-a38f8732dfb7"
+    }
+  },
+  "channel_requirements": ["ecommerce", "mobile"],
+}

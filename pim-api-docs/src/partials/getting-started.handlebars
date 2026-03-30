@@ -1,0 +1,18 @@
+{{!-- Shared template for the getting started pages --}}
+{{#> layout title=title description=description }}
+    <div class="container">
+        <div class="row">
+            <div class="col-xs-12">
+                <h1>
+                    {{{title}}}
+                    {{#if deprecated}}
+                       <span class="label label-beta">Deprecated</span>
+                    {{/if}}
+                </h1>
+            </div>
+        </div>
+        <div class="row">
+            {{{mainContent}}}
+        </div>
+    </div>
+{{/layout}}

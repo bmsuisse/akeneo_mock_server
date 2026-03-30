@@ -1,0 +1,490 @@
+Product:
+  $ref: ./resources/products/definitions/product.yaml
+ProductWithIntents:
+  $ref: ./resources/products/definitions/product_with_intents.yaml
+ProductExamples:
+  $ref: ./resources/products/definitions/examples/products.yaml
+ProductList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/Product"
+
+ProductUuid:
+  $ref: ./resources/products_uuid/definitions/product_uuid.yaml
+ProductUUidWithIntents:
+  $ref: ./resources/products_uuid/definitions/product_uuid_with_intents.yaml
+ProductUuidExamples:
+  $ref: ./resources/products_uuid/definitions/examples/products_uuid.yaml
+ProductUuidList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/ProductUuid"
+
+ProductModel:
+  $ref: ./resources/product_models/definitions/product_model.yaml
+ProductModelWithIntents:
+  $ref: ./resources/product_models/definitions/product_model_with_intents.yaml
+ProductModelList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/ProductModel"
+
+PublishedProduct:
+  $ref: ./resources/published_products/definitions/published_product.yaml
+PublishedProductList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/PublishedProduct"
+
+ReferenceEntity:
+  type: object
+  allOf:
+    - $ref: ./resources/reference_entities/definitions/reference_entity_links.yaml
+    - $ref: ./resources/reference_entities/definitions/reference_entity.yaml
+  example:
+    {
+      "_links":
+        {
+          "image_download":
+            {
+              "href": "https://demo.akeneo.com/api/rest/v1/reference-entities-media-files/0/2/d/6/54d81dc888ba1501a8g765f3ab5797569f3bv756c_ref_img.png",
+            },
+        },
+      "code": "brands",
+      "labels": { "en_US": "Brands", "fr_FR": "Marques" },
+      "image": "0/2/d/6/54d81dc888ba1501a8g765f3ab5797569f3bv756c_ref_img.png",
+    }
+
+ReferenceEntityList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ReferenceEntityItemList"
+    - $ref: ./resources/reference_entities/definitions/reference_entity.yaml
+
+ReferenceEntityAttribute:
+  $ref: ./resources/reference_entity_attributes/definitions/reference_entity_attribute.yaml
+ReferenceEntityAttributeList:
+  type: array
+  items:
+    $ref: ./resources/reference_entity_attributes/definitions/reference_entity_attribute.yaml
+
+ReferenceEntityAttributeOption:
+  $ref: ./resources/reference_entity_attributes/definitions/reference_entity_attribute_option.yaml
+ReferenceEntityAttributeOptionList:
+  type: array
+  items:
+    $ref: ./resources/reference_entity_attributes/definitions/reference_entity_attribute_option.yaml
+
+ReferenceEntityRecord:
+  $ref: ./resources/reference_entity_records/definitions/reference_entity_record.yaml
+ReferenceEntityRecordList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ReferenceEntityRecordItemList"
+    - $ref: ./resources/reference_entity_records/definitions/reference_entity_record.yaml
+
+Category:
+  $ref: ./resources/categories/definitions/category.yaml
+CategoryUpdate:
+  $ref: ./resources/categories/definitions/category_update.yaml
+CategoryList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/Category"
+
+MeasureFamily:
+  $ref: ./resources/measure_families/definitions/measure_family.yaml
+MeasureFamilyList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/MeasureFamily"
+
+MeasurementFamily:
+  $ref: ./resources/measurement_families/definitions/measurement_family.yaml
+MeasurementFamilyList:
+  $ref: "#/definitions/MeasurementFamily"
+
+Family:
+  $ref: ./resources/families/definitions/family.yaml
+FamilyList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/Family"
+
+FamilyVariant:
+  $ref: ./resources/families/definitions/family_variant_write.yaml
+FamilyVariantRead:
+  $ref: ./resources/families/definitions/family_variant_read.yaml
+FamilyVariantList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/FamilyVariantRead"
+
+Attribute:
+  $ref: ./resources/attributes/definitions/attribute.yaml
+AttributeList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/Attribute"
+
+AttributeOption:
+  $ref: ./resources/attributes/definitions/attribute_option.yaml
+AttributeOptionList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/AttributeOption"
+
+AttributeGroup:
+  $ref: ./resources/attribute_groups/definitions/attribute_group.yaml
+AttributeGroupList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/AttributeGroup"
+
+MediaFile:
+  allOf:
+    - $ref: ./resources/media_files/definitions/media_file_links.yaml
+    - $ref: ./resources/media_files/definitions/media_file.yaml
+  example:
+    {
+      "_links":
+        {
+          "download":
+            {
+              "href": "https://demo.akeneo.com/api/rest/v1/media-files/7/5/8/e/758e39d48ea7b42a55091434fd3d8b6cf3189b7f_10806799_1356.jpg/download",
+            },
+        },
+      "code": "7/5/8/e/758e39d48ea7b42a55091434fd3d8b6cf3189b7f_10806799_1356.jpg",
+      "original_filename": "10806799-1356.jpg",
+      "mime_type": "image/jpeg",
+      "size": 16070,
+      "extension": "jpg",
+    }
+
+MediaFileList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/MediaFileItemList"
+    - $ref: ./resources/media_files/definitions/media_file.yaml
+
+Locale:
+  $ref: ./resources/locales/definitions/locale.yaml
+LocaleList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/Locale"
+
+Channel:
+  $ref: ./resources/channels/definitions/channel.yaml
+ChannelList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/Channel"
+
+AssociationType:
+  $ref: ./resources/association_types/definitions/association_type.yaml
+AssociationTypeList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/AssociationType"
+
+Currency:
+  $ref: ./resources/currencies/definitions/currency.yaml
+CurrencyList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/Currency"
+
+AssetFamilyExamples:
+  $ref: ./resources/asset_families/definitions/examples/asset_family.yaml
+AssetFamiliesExamples:
+  $ref: ./resources/asset_families/definitions/examples/asset_families.yaml
+
+AssetFamilyList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/AssetFamilyItemList"
+    - $ref: ./resources/asset_families/definitions/asset_family.yaml
+
+AssetFamilyItemList:
+  type: object
+  properties:
+    _links:
+      type: object
+      properties:
+        self:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI of the resource
+
+AssetAttributeList:
+  type: array
+  items:
+    $ref: ./resources/asset_attributes/definitions/asset_attribute.yaml
+
+AssetAttributeOptionList:
+  type: array
+  items:
+    $ref: ./resources/asset_attributes/definitions/asset_attribute_option.yaml
+
+AssetList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/AssetItemList"
+    - $ref: ./resources/assets/definitions/asset.yaml
+
+AssetItemList:
+  type: object
+  properties:
+    _links:
+      type: object
+      properties:
+        self:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI of the resource
+
+Error:
+  type: object
+  properties:
+    code:
+      type: integer
+      description: HTTP status code
+    message:
+      type: string
+      description: Message explaining the error
+ErrorByLine:
+  type: object
+  properties:
+    line:
+      type: integer
+      description: Line number
+    identifier:
+      type: string
+      description: Resource identifier, only filled when the resource is a product
+    code:
+      type: string
+      description: Resource code, only filled when the resource is not a product
+    status_code:
+      type: integer
+      description: HTTP status code, see <a href="/documentation/responses.html#client-errors">Client errors</a> to understand the meaning of each code
+    message:
+      type: string
+      description: Message explaining the error
+ErrorByLineProductUuid:
+  type: object
+  properties:
+    line:
+      type: integer
+      description: Line number
+    uuid:
+      type: string
+      description: Product uuid
+    status_code:
+      type: integer
+      description: HTTP status code, see <a href="/documentation/responses.html#client-errors">Client errors</a> to understand the meaning of each code
+    message:
+      type: string
+      description: Message explaining the error
+ErrorByObject:
+  type: array
+  items:
+    type: object
+    properties:
+      code:
+        type: string
+        description: Resource code
+      status_code:
+        type: integer
+        description: HTTP status code, see <a href="/documentation/responses.html#client-errors">Client errors</a> to understand the meaning of each code
+      message:
+        type: string
+        description: Message explaining the error
+Pagination:
+  type: object
+  properties:
+    _links:
+      type: object
+      properties:
+        self:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI of the current page of resources
+        first:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI of the first page of resources
+        previous:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI of the previous page of resources
+        next:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI of the next page of resources
+    current_page:
+      type: integer
+      description: Current page number
+SearchAfterPagination:
+  type: object
+  properties:
+    _links:
+      type: object
+      properties:
+        self:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI of the current page of resources
+        first:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI of the first page of resources
+        next:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI of the next page of resources
+ItemList:
+  type: object
+  properties:
+    _links:
+      type: object
+      properties:
+        self:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI of the resource
+
+MediaFileItemList:
+  type: object
+  properties:
+    _links:
+      type: object
+      properties:
+        self:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI to get the metadata of the media file
+        download:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI to download the binaries of the media file
+
+ReferenceEntityItemList:
+  type: object
+  properties:
+    _links:
+      type: object
+      properties:
+        self:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI of the resource
+        image_download:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI to download the binaries of the reference entity image file
+ReferenceEntityRecordItemList:
+  type: object
+  properties:
+    _links:
+      type: object
+      properties:
+        self:
+          type: object
+          properties:
+            href:
+              type: string
+              description: URI of the resource
+
+DeprecatedAsset:
+  $ref: ./resources/deprecated/assets/definitions/asset.yaml
+DeprecatedAssetList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/DeprecatedAsset"
+DeprecatedAssetReferenceFile:
+  $ref: ./resources/deprecated/assets/definitions/asset_reference_file.yaml
+DeprecatedAssetVariationFile:
+  $ref: ./resources/deprecated/assets/definitions/asset_variation_file.yaml
+
+DeprecatedAssetCategory:
+  $ref: ./resources/deprecated/asset_categories/definitions/asset_category.yaml
+DeprecatedAssetCategoryList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/DeprecatedAssetCategory"
+
+DeprecatedAssetTag:
+  $ref: ./resources/deprecated/asset_tags/definitions/asset_tag.yaml
+DeprecatedAssetTagList:
+  type: object
+  allOf:
+    - $ref: "#/definitions/ItemList"
+    - $ref: "#/definitions/DeprecatedAssetTag"
+
+DeprecatedAssetReferenceFileUploadWarning:
+  type: object
+  properties:
+    message:
+      type: string
+      description: Message explaining the warning
+    errors:
+      type: array
+      items:
+        type: object
+        properties:
+          channel:
+            type: string
+            description: Channel for which the variation file generation failed
+          locale:
+            type: string
+            description: Locale for which the variation file generation failed
+          message:
+            type: string
+            description: Message explaining why the variation file generation failed
+

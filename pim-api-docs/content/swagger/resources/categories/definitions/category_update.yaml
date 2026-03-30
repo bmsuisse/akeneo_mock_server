@@ -1,0 +1,106 @@
+type: object
+required: ["code"]
+properties:
+  code:
+    type: string
+    description: Category code
+    x-immutable: true
+  parent:
+    type: string
+    description: Category code of the parent's category
+    x-validation-rules: "&bull; It is either equal to `null` or to an existing category code. &#10;&bull; If equal to an existing category code, it cannot reference itself."
+    default: "null"
+  updated:
+    type: string
+    description: Date of the last update
+    format: dateTime
+    x-read-only: true
+  position:
+    type: integer
+    description: Position of the category in its level, start from 1 (only available since the 7.0 version and when query parameter "with_position" is set to "true")
+    x-read-only: true
+  labels:
+    type: object
+    description: Category labels for each locale
+    x-validation-rules: The `localeCode` is the code of an existing and activated locale
+    default: {}
+    properties:
+      localeCode:
+        type: string
+        description: Category label for the locale `localeCode`
+  values:
+    type: array
+    description: Attribute values.
+    default: []
+    items:
+      type: object
+      properties:
+        data:
+          type: string
+          description: Attribute value. It should be a `string` for Text and Text Area attributes, a `boolean` for Yes/No attribute and for Image attribute use the <a href="api-reference.html#post_category_media_files">create category media file endpoint</a>. It can also be `null` to remove the value.
+        locale:
+          type: string
+          description: <a href="api-reference-paas.html#Locale">Locale</a> code of the attribute value.
+        channel:
+          type: string
+          description: <a href="api-reference-paas.html#Channel">Channel</a> code of the attribute value.
+        attribute_code:
+          type: string
+          description: The attribute code.
+  validations:
+    type: object
+    description: Category validations
+    x-validation-rules: Only applicable to root category
+    default: {}
+    properties:
+      max_categories_per_product:
+        type: integer
+        description: Set maximum number of categories per product
+      only_leaves:
+        type: boolean
+        description: Restrict categorization to the lowest level
+      is_mandatory:
+        type: boolean
+        description: Set category as mandatory for every product
+  channel_requirements:
+    type: array
+    description: List of <a href='api-reference-paas.html#Channel'>Channel</a> codes on which the category is required for products completeness. Only category trees can be required, not child categories.
+    x-validation-rules: Only applicable to root category
+    items:
+      type: string
+example:
+  {
+    "code": "winter_collection",
+    "parent": null,
+    "labels": {
+      "en_US": "Winter collection",
+      "fr_FR": "Collection hiver"
+    },
+    "values":
+      [
+        {
+          "data": "<p>Winter collection description</p>",
+          "channel": "ecommerce",
+          "locale": "en_US",
+          "attribute_code": "a_text_area_attribute",
+        },
+        {
+          "data": false,
+          "channel": "ecommerce",
+          "locale": null,
+          "attribute_code": "a_boolean_attribute",
+        },
+        {
+          "data": null,
+          "channel": null,
+          "locale": null,
+          "attribute_code": "an_image_attribute",
+        },
+      ],
+    "validations": {
+      "max_categories_per_product": 42,
+      "only_leaves": false,
+      "is_mandatory": true
+    },
+    "channel_requirements": ["ecommerce", "mobile"]
+  }

@@ -1,0 +1,51 @@
+get:
+  summary: Get list of asset families
+  operationId: "get_asset_families"
+  description: This endpoint allows you to get a list of asset families. Asset families are paginated.
+  tags:
+    - Asset family
+  x-versions:
+    - "3.2"
+    - "4.0"
+    - "5.0"
+    - "6.0"
+    - "7.0"
+  x-ee: true
+  parameters:
+    - $ref: "#/parameters/search_after"
+  responses:
+    200:
+      description: Return asset families paginated
+      schema:
+        title: Asset families
+        type: object
+        allOf:
+          - $ref: "#/definitions/SearchAfterPagination"
+          - properties:
+              _embedded:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/definitions/AssetFamilyList"
+      x-examples-per-version:
+        - x-version: "3.2"
+          x-example:
+            $ref: "#/definitions/AssetFamiliesExamples/x-1.7-to-7.0"
+        - x-version: "4.0"
+          x-example:
+            $ref: "#/definitions/AssetFamiliesExamples/x-1.7-to-7.0"
+        - x-version: "5.0"
+          x-example:
+            $ref: "#/definitions/AssetFamiliesExamples/x-1.7-to-7.0"
+        - x-version: "6.0"
+          x-example:
+            $ref: "#/definitions/AssetFamiliesExamples/x-1.7-to-7.0"
+        - x-version: "7.0"
+          x-example:
+            $ref: "#/definitions/AssetFamiliesExamples/x-1.7-to-7.0"
+    401:
+      $ref: "#/responses/401Error"
+    406:
+      $ref: "#/responses/406Error"
