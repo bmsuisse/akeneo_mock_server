@@ -1,0 +1,30 @@
+get:
+  summary: Get a product media file
+  operationId: "get_media_files__code_"
+  description: This endpoint allows you to get the information about a given media file that is used as an attribute value of a product or a product model.
+  tags:
+    - Product media file
+  x-versions:
+    - "1.7"
+    - "2.x"
+    - "3.x"
+    - "4.0"
+    - "5.0"
+    - "6.0"
+    - "7.0"
+  parameters:
+    - $ref: '#/parameters/code'
+  responses:
+    200:
+      description: OK
+      x-details: Returns the content of the media file in JSON standard format
+      schema:
+        $ref: '#/definitions/MediaFile'
+    401:
+      $ref: "#/responses/401Error"
+    403:
+      $ref: "#/responses/403Error"
+    404:
+      $ref: "#/responses/404Error"
+    406:
+      $ref: "#/responses/406Error"

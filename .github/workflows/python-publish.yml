@@ -17,19 +17,19 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/bmsdna.table_rendering
+      url: https://pypi.org/p/akeneo_mock_server
     permissions:
       id-token: write
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: "recursive"
       - name: Set up Python
         uses: actions/setup-python@v3
         with:
           python-version: "3.12"
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      - name: Git Submodule Update
-        run: git submodule update --init --recursive
       - name: Install dependencies
         run: uv sync --all-extras --all-groups
       - name: Build package

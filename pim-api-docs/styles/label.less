@@ -1,0 +1,84 @@
+.label-akeneo {
+    .label-variant(@brand-akeneo);
+}
+
+.label-version {
+    .label-variant(white);
+    border: 1px solid @gray-light2;
+    color: @gray;
+}
+
+.label-ee {
+    .label-variant(@brand-primary);
+}
+
+.label-beta {
+    .label-variant(@brand-info);
+    font-size: 50%;
+    vertical-align: middle;
+}
+
+.label-alert {
+    .label-variant(@brand-danger);
+    font-size: 50%;
+    vertical-align: middle;
+}
+
+.rotated-label {
+    padding-right: 25px;
+    .label-beta {
+        position: absolute;
+        right: -10px;
+        top: 10px;
+        .rotate(15deg);
+    }
+}
+
+.label.label-verb {
+    text-transform: uppercase;
+    &.label-patch {
+        .label-warning();
+    }
+    &.label-post {
+        .label-info();
+    }
+    &.label-get {
+        .label-success();
+    }
+    &.label-delete {
+        .label-danger();
+    }
+    &.label-put {
+        .label-warning();
+    }
+}
+
+.label-version {
+    color: @brand-info;
+    border: none;
+    text-align: right;
+    font-size: 14px;
+}
+
+.label-version p {
+    margin-bottom: 0px;
+    margin-right: 16px;
+}
+
+.label-news {
+    &.label-fix {
+        background-color: @brand-akeneo;
+    }
+    &.label-updated {
+        background-color: @brand-info;
+    }
+    &.label-added {
+        background-color: @brand-success;
+    }
+    &.label-notice {
+        background-color: @brand-warning;
+    }
+    &.label-deprecated {
+        background-color: @brand-danger;
+    }
+}

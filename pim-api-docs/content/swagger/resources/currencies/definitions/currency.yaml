@@ -1,0 +1,18 @@
+type: object
+required: ["code"]
+properties:
+  code:
+    type: string
+    description: Currency code
+    x-immutable: true
+  enabled:
+    type: boolean
+    description: Whether the currency is enabled
+  label:
+    type: string
+    description: Currency label
+example: {
+  "code": "EUR",
+  "enabled": true,
+  "label": "EUR (Euro)"
+}

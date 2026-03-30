@@ -18,17 +18,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: "recursive"
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Git Submodule Update
-        run: git submodule update --init --recursive
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Install project dependencies
         run: uv sync --all-extras --all-groups
       - name: Pyright
-        run: uv run pyright bmsdna
+        run: uv run pyright akeneo_mock_server
       - name: Test with pytest
-        run: uv run pytest  --capture=tee-sys  tests
+        run: uv run -m pytest  --capture=tee-sys --maxfail=3 tests

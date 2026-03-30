@@ -1,0 +1,89 @@
+get:
+  summary: Get a list of currencies
+  operationId: "currencies_get_list"
+  description: This endpoint allows you to get a list of currencies. Currencies are paginated and sorted by code.
+  tags:
+    - Currency
+  x-versions:
+    - "2.x"
+    - "3.x"
+    - "4.0"
+    - "5.0"
+    - "6.0"
+    - "7.0"
+  parameters:
+    - name: search
+      in: query
+      description: Filter currencies, for more details see the <a href="/documentation/filter.html#filter-currencies">Filters</a> section
+      required: false
+      type: string
+    - $ref: '#/parameters/page'
+    - $ref: '#/parameters/limit'
+    - $ref: '#/parameters/with_count'
+  responses:
+    200:
+      description: Return currencies paginated
+      schema:
+        title: Currencies
+        type: object
+        allOf:
+          - $ref: '#/definitions/Pagination'
+          - properties:
+              _embedded:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/definitions/CurrencyList'
+      examples: {
+        _links: {
+          self: {
+            href: "https://demo.akeneo.com/api/rest/v1/currencies?page=1&limit=3"
+          },
+          first: {
+            href: "https://demo.akeneo.com/api/rest/v1/currencies?page=1&limit=3"
+          }
+        },
+        current_page: 1,
+        _embedded: {
+          items: [
+            {
+              "_links": {
+                "self": {
+                  "href": "https://demo.akeneo.com/api/rest/v1/currencies/ADP"
+                }
+              },
+              "code": "ADP",
+              "enabled": true,
+              "label": "ADP (Andorran Peseta)"
+            },
+            {
+              "_links": {
+                "self": {
+                  "href": "https://demo.akeneo.com/api/rest/v1/currencies/AED"
+                }
+              },
+              "code": "AED",
+              "enabled": true,
+              "label": "AED (United Arab Emirates Dirham)"
+            },
+            {
+              "_links": {
+                "self": {
+                  "href": "https://demo.akeneo.com/api/rest/v1/currencies/AFA"
+                }
+              },
+              "code": "AFA",
+              "enabled": false,
+              "label": "AFA (Afghan Afghani (1927–2002))"
+            }
+          ]
+        }
+      }
+    401:
+      $ref: "#/responses/401Error"
+    403:
+      $ref: "#/responses/403Error"
+    406:
+      $ref: "#/responses/406Error"

@@ -1,0 +1,150 @@
+<html>
+<head>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+    <!-- <link href='https://fonts.googleapis.com/css?family=Lato' rel='stylesheet'> -->
+    <link rel="preload" href="/fonts/Roobert-Light.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="/fonts/Roobert-LightItalic.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="fonts/Roobert-Regular.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="/fonts/Roobert-RegularItalic.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="/fonts/Roobert-Medium.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="/fonts/Roobert-MediumItalic.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="/fonts/Roobert-SemiBold.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="/fonts/Roobert-SemiBoldItalic.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="/fonts/Roobert-Bold.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="/fonts/Roobert-BoldItalic.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="/fonts/Roobert-Heavy.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="/fonts/Roobert-HeavyItalic.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="stylesheet" href="components.css">
+    <link rel="stylesheet" href="tile.css">
+    <link rel="stylesheet" href="tile-app.css">
+    <link rel="stylesheet" href="block-welcome.css">
+    <link rel="stylesheet" href="block-about-app.css">
+</head>
+<body>
+
+<hr>
+
+<iframe src="./tile-app.html" onload="this.before((this.contentDocument.body||this.contentDocument).children[0]);this.remove()"></iframe>
+
+<div>
+    <!-- WIP component -->
+    <a href="https://google.com" class="back-button">
+        <button>
+            <img src="../content/img/icons/icon--arrow-back.svg" style="margin-right: 10px;">
+            All guided tutorials
+        </button>
+    </a>
+</div>
+
+<hr>
+
+<table class="tag-container">
+    <tr>
+        <td>Use case:</td>
+        <td>
+            <button aria-pressed="false" class="tag-selectable">
+                <div class="tag-color tag-color-light-blue"></div>
+                <div class="tag-label">App Workflow</div>
+            </button>
+        </td>
+    </tr>
+    <tr>
+        <td>PIM Features:</td>
+        <td>
+            <button aria-pressed="false" class="tag-selectable">
+                <div class="tag-color tag-color-red"></div>
+                <div class="tag-label">Channel</div>
+            </button>
+        </td>
+    </tr>
+</table>
+
+<hr>
+
+<div class="endpoint-container">
+    <div class="endpoint-text">REST API endpoint(s):</div>
+    <a href="urllink" class="endpoint-link">channel</a>
+</div>
+
+<hr>
+
+<button aria-pressed="false" class="tag-selectable tag-selected">
+    <div class="tag-color tag-color-light-blue"></div>
+    <div class="tag-label">Label</div>
+    <img aria-hidden="true" src="../content/img/icons/icon--unselect-tag.svg">
+</button>
+
+<hr>
+
+<div class="block-requirements">
+    <div class="block-requirements-headline">
+        If you're starting building your App, make sure you previously followed:
+    </div>
+    <div class="block-requirements-row">
+        <img src="../content/img/illustrations/illus--Attributegroup.svg" width="110px" class="hidden-xs">
+        <div class="block-requirements-steps">
+            <div>Step 1. <a href="urllink">Get your App token tutorial</a></div>
+            <div>Step 2. <a href="urllink">Retrieve PIM structure tutorial</a></div>
+        </div>
+    </div>
+</div>
+
+<hr>
+
+<div class="block-next-steps block-next-steps-alt">
+    <img src="../content/img/illustrations/illus--Attribute.svg" width="140px" class="hidden-xs">
+    <div class="block-next-steps-column">
+        <div class="block-next-steps-title">Next Step</div>
+        <div class="block-next-steps-text">Now that you collected your categories, we advise you to follow</div>
+        <div>
+            <ul>
+                <li><a href="urllink">How to parse product values tutorial</a></li>
+                <li><a href="urllink">How to saucisse</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<hr>
+
+<div class="block-next-steps block-next-steps-main">
+    <div class="block-next-steps-title">Next Step</div>
+    <div class="block-next-steps-text">Now that you’ve gotten your App token, continue the journey with Step 2!</div>
+    <a href="/" class="next-steps-button next-steps-button-smaller">
+        <div class="next-steps-button-number">2</div>
+        <div class="next-steps-button-text">
+            Develop<br>
+            your App
+        </div>
+    </a>
+</div>
+
+<hr>
+
+<a href="/" class="next-steps-button">
+    <div class="next-steps-button-number">1</div>
+    <div class="next-steps-button-text">
+        Get your<br>
+        App token
+    </div>
+</a>
+
+<hr>
+
+<iframe src="./tile.html" onload="this.before((this.contentDocument.body||this.contentDocument).children[0]);this.remove()"></iframe>
+
+</body>
+
+<hr>
+
+<iframe src="./block-welcome.html" onload="this.before((this.contentDocument.body||this.contentDocument).children[0]);this.remove()"></iframe>
+
+<hr>
+
+<iframe src="./block-about-app.html" onload="this.before((this.contentDocument.body||this.contentDocument).children[0]);this.remove()"></iframe>
+
+<hr>
+
+<iframe src="./button-publish-your-app.html" onload="this.before((this.contentDocument.body||this.contentDocument).children[0]);this.remove()"></iframe>
+
+</html>

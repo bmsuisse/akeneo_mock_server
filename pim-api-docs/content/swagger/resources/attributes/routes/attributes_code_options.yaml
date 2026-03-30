@@ -1,0 +1,190 @@
+get:
+  summary: Get list of attribute options
+  operationId: "get_attributes__attribute_code__options"
+  description: This endpoint allows you to get a list of attribute options. Attribute options are paginated and sorted by code.
+  tags:
+    - Attribute option
+  x-versions:
+    - "1.7"
+    - "2.x"
+    - "3.x"
+    - "4.0"
+    - "5.0"
+    - "6.0"
+    - "7.0"
+  parameters:
+    - $ref: '#/parameters/attribute_code'
+    - $ref: '#/parameters/page'
+    - $ref: '#/parameters/limit'
+    - $ref: '#/parameters/with_count'
+  responses:
+    200:
+      description: Return attribute options paginated
+      schema:
+        title: Attribute Options
+        type: object
+        allOf:
+          - $ref: '#/definitions/Pagination'
+          - properties:
+              _embedded:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/definitions/AttributeOptionList'
+      examples: {
+        _links: {
+          self: {
+            href: "https://demo.akeneo.com/api/rest/v1/attributes/color/options?page=3&limit=3"
+          },
+          first: {
+            href: "https://demo.akeneo.com/api/rest/v1/attributes/color/options?page=1&limit=3"
+          },
+          previous: {
+            href: "https://demo.akeneo.com/api/rest/v1/attributes/color/options?page=2&limit=3"
+          },
+          next: {
+            href: "https://demo.akeneo.com/api/rest/v1/attributes/color/options?page=4&limit=3"
+          }
+        },
+        current_page: 3,
+        _embedded: {
+          items: [
+            {
+              "_links": {
+                "self": {
+                  "href": "https://demo.akeneo.com/api/rest/v1/attributes/color/options/red"
+                }
+              },
+              "code": "red",
+              "attribute": "a_simple_select",
+              "sort_order": 1,
+              "labels": {
+                "en_US": "Red",
+                "fr_FR": "Rouge"
+              }
+            },
+            {
+              "_links": {
+                "self": {
+                  "href": "https://demo.akeneo.com/api/rest/v1/attributes/color/options/black"
+                }
+              },
+              "code": "black",
+              "attribute": "a_simple_select",
+              "sort_order": 2,
+              "labels": {
+                "en_US": "Black",
+                "fr_FR": "Noir"
+              }
+            },
+            {
+              "_links": {
+                "self": {
+                  "href": "https://demo.akeneo.com/api/rest/v1/attributes/color/options/purple"
+                }
+              },
+              "code": "purple",
+              "attribute": "a_simple_select",
+              "sort_order": 3,
+              "labels": {
+                "en_US": "Purple",
+                "fr_FR": "Violet"
+              }
+            }
+          ]
+        }
+      }
+    401:
+      $ref: "#/responses/401Error"
+    403:
+      $ref: "#/responses/403Error"
+    406:
+      $ref: "#/responses/406Error"
+post:
+  summary: Create a new attribute option
+  operationId: "post_attributes__attribute_code__options"
+  description: This endpoint allows you to create a new attribute option.
+  tags:
+    - Attribute option
+  x-versions:
+    - "1.7"
+    - "2.x"
+    - "3.x"
+    - "4.0"
+    - "5.0"
+    - "6.0"
+    - "7.0"
+  parameters:
+    - $ref: '#/parameters/attribute_code'
+    - name: body
+      in: body
+      schema:
+        $ref: "#/definitions/AttributeOption"
+  responses:
+    201:
+      $ref: "#/responses/Created"
+    400:
+      $ref: "#/responses/400Error"
+    401:
+      $ref: "#/responses/401Error"
+    403:
+      $ref: "#/responses/403Error"
+    415:
+      $ref: "#/responses/415Error"
+    422:
+      $ref: "#/responses/422Error"
+patch:
+  summary: Update/create several attribute options
+  operationId: "patch_attributes__attribute_code__options"
+  tags:
+    - Attribute option
+  x-versions:
+    - "2.1"
+    - "2.2"
+    - "2.3"
+    - "3.x"
+    - "4.0"
+    - "5.0"
+    - "6.0"
+    - "7.0"
+  description: This endpoint allows you to update several attribute options at once. Please note that this endpoint applies a rate limit of 3 concurrent API requests per second.
+  x-body-by-line: Contains several lines, each line is an attribute option in JSON standard format
+  parameters:
+    - $ref: '#/parameters/attribute_code'
+    - name: body
+      in: body
+      schema:
+        $ref: "#/definitions/AttributeOption"
+        x-examples:
+          x-example-1:
+            '{"code":"black", "attribute":"a_simple_select", "labels":{"en_US": "Black","fr_FR": "Noir"}}'
+          x-example-2:
+            '{"code":"red", "label":{"en_US": "Red","fr_FR": "Rouge"}}'
+          x-example-3:
+            '{"code":"yellow", "labels":{"en_US": "Yellow","fr_FR": "Jaune"}}'
+  responses:
+    200:
+      description: OK
+      x-details: Returns a plain text response whose lines are JSON containing the status of each update or creation
+      x-no-entity: true
+      schema:
+        $ref: "#/definitions/ErrorByLine"
+      examples:
+        x-example-1:
+          '{"line":1,"code":"black","status_code":201}'
+        x-example-2:
+          '{"line":2,"code":"red","status_code":422,"message":"Property \"label\" does not exist. Check the API format documentation."}'
+        x-example-3:
+          '{"line":3,"code":"yellow","status_code":204}'
+    401:
+      $ref: "#/responses/401Error"
+    403:
+      $ref: "#/responses/403Error"
+    413:
+      $ref: "#/responses/413Error"
+    415:
+      $ref: "#/responses/415ErrorStream"
+    429:
+      $ref: "#/responses/429Error"

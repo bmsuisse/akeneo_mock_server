@@ -1,0 +1,32 @@
+[extend]
+# useDefault will extend the base configuration with the default gitleaks config:
+# https://github.com/zricethezav/gitleaks/blob/master/config/gitleaks.toml
+useDefault = true
+
+[allowlist]
+description = 'Custom global allow list'
+paths = [
+    # These files generate alerts but they are test files
+    '''content/swagger/akeneo-web-api.json''',
+    # GraphQL documentation
+    '''content/graphql/setup/getting-started.md''',
+    # On API Spec we have example of secret
+    '''content/swagger/aep/public-oas.yml''',
+    # Event Platform getting started documentation
+    '''content/event-platform/getting-started.md''',
+    # Rest API old authentication
+    '''content/rest-api/authentication_old.md''',
+    # UI Extension documentation
+    '''content/extensions/api.md''',
+    '''content/extensions/security/iframe.md''',
+    '''content/advanced-extensions/api-deployment.md''',
+    '''content/advanced-extensions/development-workflow.md''',
+    '''content/advanced-extensions/sdk-credentials.md''',
+    # PX Insights getting started documentation
+    '''content/px-insights/getting-started.md''',
+    # Event Platform concepts documentation with example certificates
+    '''content/event-platform/concepts.md''',
+    # MCP getting started documentation with example credentials
+    '''content/mcp/getting-started.md''',
+    '''content/mcp/capabilities.md''',
+]
