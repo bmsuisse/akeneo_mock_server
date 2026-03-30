@@ -1,0 +1,3 @@
+[submodule "pim-api-docs"]
+	path = pim-api-docs
+	url = https://github.com/akeneo/pim-api-docs

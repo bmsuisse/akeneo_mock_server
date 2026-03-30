@@ -1,0 +1,79 @@
+[project]
+name = "akeneo_mock_server"
+version = "0.5.0"
+description = "This implements an API that's compatible to Akeneo. If it's not, it's a bug. This is NOT an official Akeneo Product"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.135.1",
+    "httpx>=0.28.1",
+    "persist-queue[extra]>=1.1.0",
+    "psycopg[binary,pool]>=3.3.3",
+    "pydantic>=2.12.5",
+    "sqlglot>=26.11.2",
+]
+[project.optional-dependencies]
+run = [
+  "uvicorn>=0.41.0",
+]
+
+[dependency-groups]
+test = [    
+    "pytest>=9.0.2",
+    "docker>=7.1.0",
+]
+dev = [
+    "uvicorn>=0.41.0",
+    "pytest>=9.0.2",
+    "ruff>=0.15.4",
+    "schemathesis>=4.11.0",
+    "pyright>=1.1.408",
+]
+
+[tool.pyright]
+venv = ".venv"
+venvPath = "."
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+include = [
+  "akeneo_mock_server",
+]
+exclude = [
+  "tests",
+  "examples",
+  "pim-api-docs",
+]
+reportArgumentType = "none"
+reportCallIssue = "none"
+reportAttributeAccessIssue = "none"
+reportReturnType = "none"
+
+[tool.ruff]
+line-length = 119
+
+[project.scripts]
+run_akeneo_mock = "akeneo_mock_server.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.10.8,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "akeneo_mock_server"
+module-root = ""
+
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "."
+]
+
+
+[[tool.uv.index]]
+name = "BMSAzureDevOps"
+url = "https://VssSessionToken@pkgs.dev.azure.com/bmeurope/_packaging/BMS/pypi/simple/"
+explicit = true
+publish-url = "https://pkgs.dev.azure.com/bmeurope/_packaging/BMS/pypi/upload/"
+
+[tool.uv]
+native-tls=true

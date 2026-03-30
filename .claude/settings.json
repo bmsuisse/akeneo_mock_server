@@ -1,0 +1,24 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },"permissions": {
+    "allow": [
+      "Bash(uv run pytest *)",
+      "Bash(uv run pyright *)",
+      "Bash(uv sync *)",
+      "Bash(uv run ruff *)",
+      "Bash(bun run *)",
+      "Bash(pnpm run *)",
+      "Bash(npm run *)",
+      "Bash(git submodule update *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(grep *)"
+    ]
+  },
+  "filesystem": {
+      "allowRead": ["~/projects","/root/.cache/uv"
+      ]
+  }
+}

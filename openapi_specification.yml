@@ -1,0 +1,996 @@
+openapi: 3.0.0
+tags:
+    - name: "Subscriber"
+      description: "A Subscriber holds the Subscriptions for a given client id of a PIM"
+    - name: "Subscription"
+      description: "A Subscription defines the event you want to Subscribe and the destination where they will be sent"
+info:
+  title: Akeneo - Event Platform Management API
+  description: |
+    ### How to use this API
+
+    > For detailed documentation about the prerequisites and the concepts, please refer to the official [Akeneo Event Platform documentation](https://api.akeneo.com/event-platform/overview.html)
+
+    ### Using Postman
+
+    [A Postman collection](https://storage.googleapis.com/akecld-prd-sdk-aep-prd-api-assets/generated_postman_collection.json) is available to ease the manipulation of this API.
+
+    By providing correct Postman variable values you'll benefit from automatic authentication to the API.
+
+    #### Import Postman environment variables template
+
+    The best way to start is by importing the postman environment template.
+    
+    You can [download it here](https://storage.googleapis.com/akecld-prd-sdk-aep-prd-api-assets/postman_environment_template.json), then import it in Postman.
+
+  version: 1.0.0
+  contact:
+    name: "Akeneo Support"
+    url: "https://www.akeneo.com/support-help-center/"
+    email: "contact@akeneo.com"
+paths:
+  /api/v1/subscribers:
+    post:
+      summary: 'Create a Subcriber'
+      description: |
+        Create a Subscriber which is linked to a specific client id of a PIM.
+        
+        It holds all the Subscriptions.
+      tags:
+        - Subscriber
+      operationId: create_subscriber
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+      requestBody:
+        description: |
+          The `name` property is here to describe the Subscriber with a human readable sentence.
+          Can be useful if you're in charge of a multitenant App to quickly see which Subscriber refers to what, it's purely informative and have not impact on the Event Platform features.
+          It's up to you to put relevant information such as the name of your App concatenated with the tenant, example:
+           - Shopify App - ACME company
+           - Micro service for ACME slack notifications
+
+          We will use the `technical_email` to send you notifications on some decisions made by the platform.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriberRequest'
+      responses:
+        '201':
+          description: |
+            Once the Subscriber is created you'll receive the following payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriberResponse'
+        '400':
+          $ref: "#/components/responses/400"
+        '401':
+          $ref: "#/components/responses/401"
+        '409':
+          $ref: "#/components/responses/409"
+    get:
+      summary: 'Retrieve all Subscribers'
+      description: |
+        Retrieve all active Subscribers associated with your credentials.
+      tags:
+        - Subscriber
+      operationId: retrieve_all_subscribers
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+      responses:
+        '200':
+          description: |
+            List all Subscribers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriberListResponse'
+        '401':
+          $ref: "#/components/responses/401"
+  /api/v1/subscribers/{subscriber_id}:
+    get:
+      summary: 'Get a Subscriber'
+      description: |
+        Get a Subscriber configuration by its identifier
+      tags:
+        - Subscriber
+      operationId: retrieve_a_subscriber
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+        - $ref: "#/components/parameters/subscriberId"
+      responses:
+        '200':
+          description: |
+            The Subscriber has been found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriberResponse'
+        '401':
+          $ref: "#/components/responses/401"
+        '404':
+          $ref: "#/components/responses/404"
+    patch:
+      summary: 'Update a Subscriber'
+      description: |
+        You can update a Subscriber when you want to change it's name or change the contact email.
+      tags:
+        - Subscriber
+      operationId: update_subscriber
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+        - $ref: "#/components/parameters/subscriberId"
+      responses:
+        '200':
+          description: |
+            The Subscriber has been updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriberResponse'
+        '400':
+          $ref: "#/components/responses/400"
+        '401':
+          $ref: "#/components/responses/401"
+        '404':
+          $ref: "#/components/responses/404"
+      requestBody:
+        description: |
+          You can update any data belonging to the following payload.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriberRequest'
+    delete:
+      summary: 'Delete a Subscriber'
+      description: |
+        You need to manage the lifecycle of the Subscriber, you can delete a Subscriber when it is not needed anymore.
+      tags:
+        - Subscriber
+      operationId: delete_subscriber
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+        - $ref: "#/components/parameters/subscriberId"
+      responses:
+        '200':
+          description: |
+            The deletion is effective directly
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriberResponse'
+        '401':
+          $ref: "#/components/responses/401"
+        '403':
+          $ref: "#/components/responses/403"
+        '404':
+          $ref: "#/components/responses/404"
+  /api/v1/subscribers/{subscriber_id}/subscriptions:
+    post:
+      summary: 'Create a Subscription'
+      description: |
+        Create a Subscription with a configuration of a destination and the list of events the destination wants to receive.
+      tags:
+        - Subscription
+      operationId: create_subscription
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+        - $ref: "#/components/parameters/subscriberId"
+      requestBody:
+        description: |
+          Respect the following payload to create and configure a Subscription. 
+
+          Part of the payload is specific to the destination you choose.
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/SubscriptionHTTPSRequest'
+                - $ref: '#/components/schemas/SubscriptionPubSubRequest'
+      responses:
+        '201':
+          description: Returns the created Subscription.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/SubscriptionPubSubResponse'
+                  - $ref: '#/components/schemas/SubscriptionHTTPSResponse'
+        '400':
+          $ref: "#/components/responses/400"
+        '401':
+          $ref: "#/components/responses/401"
+        '403':
+          $ref: "#/components/responses/403"
+        '404':
+          $ref: "#/components/responses/404"
+        '409':
+          $ref: "#/components/responses/409"   
+    get:
+      summary: 'Retrieve all Subscriptions of a Subscriber'
+      description: |
+        Retrieve the list of all Subscriptions for a specific Subscriber.
+      tags:
+        - Subscription
+      operationId: list_all
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+        - $ref: "#/components/parameters/subscriberId"
+      responses:
+        '200':
+          description: |
+            Returns the list of Subscriptions that are either active and suspended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionListResponse'
+        '401':
+          $ref: "#/components/responses/401"
+        '403':
+          $ref: "#/components/responses/403"
+        '404':
+          $ref: "#/components/responses/404"
+  /api/v1/subscribers/{subscriber_id}/subscriptions/{subscription_id}:
+    get:
+      summary: 'Get a Subscription'
+      description: |
+        Retrieve a Subscription detail by its identifier
+      tags:
+        - Subscription
+      operationId: retrieve_a_subscription
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+        - $ref: "#/components/parameters/subscriberId"
+        - $ref: "#/components/parameters/subscriptionId"
+      responses:
+        '200':
+          description: |
+            Returns the Subscription detail
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/SubscriptionPubSubResponse'
+                  - $ref: '#/components/schemas/SubscriptionHTTPSResponse'
+        '401':
+          $ref: "#/components/responses/401"
+        '403':
+          $ref: "#/components/responses/403"
+        '404':
+          $ref: "#/components/responses/404"
+    patch:
+      summary: 'Update a Subscription'
+      description: |
+        Update a Subscription configuration. 
+
+        You can expect a slight delay between the update and the application by the platform.
+      tags:
+        - Subscription
+      operationId: update_a_subscription
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+        - $ref: "#/components/parameters/subscriberId"
+        - $ref: "#/components/parameters/subscriptionId"
+      requestBody:
+        description: |
+          The following payload data can be updated
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/SubscriptionHTTPSRequest'
+                - $ref: '#/components/schemas/SubscriptionPubSubRequest'
+      responses:
+        '200':
+          description: |
+            Returns the updated Subscription.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/SubscriptionPubSubResponse'
+                  - $ref: '#/components/schemas/SubscriptionHTTPSResponse'
+        '401':
+          $ref: "#/components/responses/401"
+        '403':
+          $ref: "#/components/responses/403"
+        '404':
+          $ref: "#/components/responses/404"
+    delete:
+      summary: 'Delete a Subscription'
+      description: |
+        A deleted Subscription can't be re-activated again.
+
+        Ensure to suspend it if you want to pause the emission of event.
+      tags:
+        - Subscription
+      operationId: delete_a_subscription
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+        - $ref: "#/components/parameters/subscriberId"
+        - $ref: "#/components/parameters/subscriptionId"
+      responses:
+        '200':
+          description: |
+            Returns the deleted Subscription.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/SubscriptionPubSubResponse'
+                  - $ref: '#/components/schemas/SubscriptionHTTPSResponse'
+        '404':
+          $ref: "#/components/responses/404"
+  /api/v1/subscribers/{subscriber_id}/subscriptions/{subscription_id}/suspend:
+    post:
+      summary: 'Suspend a Subscription'
+      description: |
+        Suspend a Subscription when you want to pause the emission of events.
+
+        During the time of suspension, new events will be losts.
+        Ensure to resume it once you're ready to receive events again.
+      tags:
+        - Subscription
+      operationId: suspend_a_subscription
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+        - $ref: "#/components/parameters/subscriberId"
+        - $ref: "#/components/parameters/subscriptionId"
+      responses:
+        '202':
+          description: |
+            Returns the suspended Subscription.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/SubscriptionPubSubResponse'
+                  - $ref: '#/components/schemas/SubscriptionHTTPSResponse'
+        '401':
+          $ref: "#/components/responses/401"
+        '403':
+          $ref: "#/components/responses/403"
+        '404':
+          $ref: "#/components/responses/404"
+        '409':
+          $ref: "#/components/responses/409"
+  /api/v1/subscribers/{subscriber_id}/subscriptions/{subscription_id}/resume:
+    post:
+      summary: 'Resume a suspended Subscription'
+      description: |
+        A suspended Subscription can be resume with a call to this endpoint.
+
+        Suspension can be done by you, or can be decided by the platform itself depending on the behavior of your destination. You can find details in our official documentation.
+      tags:
+        - Subscription
+      operationId: resume_a_subscription
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+        - $ref: "#/components/parameters/subscriberId"
+        - $ref: "#/components/parameters/subscriptionId"
+      responses:
+        '202':
+          description: |
+            Returns the resumed Subscription.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/SubscriptionPubSubResponse'
+                  - $ref: '#/components/schemas/SubscriptionHTTPSResponse'
+        '401':
+          $ref: "#/components/responses/401"
+        '403':
+          $ref: "#/components/responses/403"
+        '404':
+          $ref: "#/components/responses/404"
+        '409':
+          $ref: "#/components/responses/409"
+  /api/v1/logs:
+    get:
+      summary: 'Retrieve Logs'
+      description: |
+        Retrieve a paginated list of logs based on optional filters.
+      tags:
+        - Logs
+      operationId: get_logs
+      parameters:
+        - $ref: "#/components/parameters/pimClientId"
+        - $ref: "#/components/parameters/pimUrl"
+        - name: page
+          in: query
+          description: |
+            The page number for pagination. Starts at 1.
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: limit
+          in: query
+          description: |
+            The number of logs to retrieve per page. Defaults to 10.
+          required: false
+          schema:
+            type: integer
+            example: 10
+        - name: order
+          in: query
+          description: |
+            Specifies the sort order of the logs. Accepted values are `asc` for ascending order 
+            and `desc` for descending order. Defaults to `desc` if not provided.
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            example: 'asc'
+        - name: start_date
+          in: query
+          description: |
+            Filter logs starting from this date (inclusive). Format: RFC 3339.
+          required: false
+          schema:
+            type: string
+            format: date-time
+            example: "2024-11-15T00:00:00Z"
+        - name: end_date
+          in: query
+          description: |
+            Filter logs until this date (inclusive). Format: RFC 3339.
+          required: false
+          schema:
+            type: string
+            format: date-time
+            example: "2024-11-15T23:59:59Z"
+        - name: log_type
+          in: query
+          description: |
+            Filter logs by type. Possible values: "action", "error".
+          required: false
+          schema:
+            type: string
+            enum:
+              - action
+              - error
+            example: "error"
+        - name: subscriber_id
+          in: query
+          description: |
+            Filter logs by subscriber ID.
+          required: false
+          schema:
+            type: string
+            format: uuid
+            example: "aa0f5c91-41ea-4c06-b3a3-af765e2ab07f"
+        - name: subscription_id
+          in: query
+          description: |
+            Filter logs by subscription ID.
+          required: false
+          schema:
+            type: string
+            format: uuid
+            example: "aa0f5c91-41ea-4c06-b3a3-af765e2ab07f"
+      responses:
+        '200':
+          description: |
+            Returns an object containing a paginated list of logs matching the filters. 
+            Each log provides detailed information about an action or error event.
+            If no logs match the filters, the `items` array will be empty.
+            Logs can represent two types:
+            - **Action Logs**: Contain details such as the operation performed, associated subscriber or subscription IDs.
+            - **Error Logs**: Contain error-specific details such as the error type, error code, and an error message.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    description: The list of logs.
+                    items:
+                      $ref: '#/components/schemas/Log'
+                example:
+                  items:
+                    - log_id: "019343ee-983b-701b-8e8c-f46b55354490"
+                      log_type: "action"
+                      timestamp: "2024-11-19T10:18:50Z"
+                      operation: "create_subscription"
+                      subscriber_id: "aa0f5c91-41ea-4c06-b3a3-af765e2ab07f"
+                      subscription_id: "7438eb60-c89c-4d6c-99da-8652cba0e286"
+                      request: {}
+                      response: {}
+
+                    - log_id: 019343ee-984b-7a42-bf66-c64108904388"
+                      log_type: "error"
+                      timestamp: "2024-11-19T10:18:50Z"
+                      subscriber_id: ""
+                      subscription_id: "7438eb60-c89c-4d6c-99da-8652cba0e286"
+                      error_type: "validation error"
+                      error_code: 400
+                      error_message: "Invalid request"
+                      request: {}
+                      response: {}
+        '400':
+          $ref: "#/components/responses/400"
+        '401':
+          $ref: "#/components/responses/401"
+        '403':
+          $ref: "#/components/responses/403"
+
+security:
+  - pimAccessToken : []
+servers:
+  - url: https://event.prd.sdk.akeneo.cloud
+components:
+  links: {}
+  callbacks: {}
+  parameters:
+    pimClientId:
+      in: header
+      name: x-pim-client-id
+      description: Client ID of the PIM Connection, App or Custom App for which the Access token has been issued
+      schema:
+        type: string
+      required: true
+    pimUrl:
+      in: header
+      name: x-pim-url
+      description: PIM Url that issued the access token
+      schema:
+        type: string
+        format: uri
+      required: true
+    subscriberId:
+      name: subscriber_id
+      in: path
+      required: true
+      description: The unique identifier of the subscriber.
+      schema:
+        type : string
+        format: uuid
+    subscriptionId:
+      name: subscription_id
+      in: path
+      required: true
+      description: The unique identifier of the subscription.
+      schema:
+        type : string
+        format: uuid
+  securitySchemes:
+    pimAccessToken:
+      type: apiKey
+      description: Valid PIM API Access Token
+      in: header
+      name: x-pim-token
+  schemas:
+    SubscriberListResponse:
+      type: array
+      description: 'Represents a list of Subscriber you receive in response'
+      items:
+        $ref: '#/components/schemas/SubscriberResponse'
+    SubscriberRequest:
+      type: object
+      description: 'Represents the Subscriber you send in the request'
+      properties:
+        name:
+          type: string
+          description: The subscriber name
+        contact:
+          type: object
+          properties:
+            technical_email:
+              type: string
+              format: email
+      example:
+        name: translation app
+        contact:
+          technical_email: john.doe@example.com
+    SubscriberResponse:
+      description: 'Represents a Subscriber response'
+      allOf:
+        - $ref: '#/components/schemas/SubscriberRequest'
+        - type: object
+          description: 'Represents the Subscriber you receive in response'
+          properties:
+            id:
+              type: string
+              format: uuid
+            subject:
+              type: string
+              format: uri
+              description: The pim associated to this subscriber, the value come from X-PIM-URL
+            status:
+              type: string
+              description: status of the subscriber
+              default: active
+              enum: ["active", "deleted", "revoked"]
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+      example:
+        id: 018e1ec5-29da-78ad-aae6-92065b9ca2a5
+        subject: https://example.cloud.akeneo.com/
+        status: active
+        createdAt: 2019-08-24T14:15:22Z
+        updatedAt: 2019-08-24T14:15:22Z
+        name: translation app
+        contact:
+          technical_email: john.doe@example.com
+    SubscriptionPubSubRequest:
+      description: 'Represents the pubsub Subscription configuration request'
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionPartialRequest'
+        - type: object
+          properties:
+            config:
+              type: object
+              properties:
+                project_id:
+                  type: string
+                  description: Google project id
+                topic_id:
+                  type: string
+                  description: Google topic id
+      example:
+        source: pim
+        subject: https://mypim.cloud.akeneo.com
+        events:
+          - com.akeneo.pim.v1.product.deleted
+        type: pubsub
+        config:
+          project_id: gcp-prd-project-name
+          topic_id: demo-integrations-events
+    SubscriptionHTTPSRequest:
+      description: 'Represents the https Subscription configuration request'
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionPartialRequest'
+        - type: object
+          properties:
+            config:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: The https destination
+                secret:
+                  description: Secrets used to sign the event
+                  type: object
+                  required:
+                    - primary
+                  properties:
+                    primary:
+                      description: Used to generate a signature of the event and add it as a request header X-AKENEO-SIGNATURE-PRIMARY
+                      type: string
+                      minLength: 16
+                      maxLength: 256
+                    secondary:
+                      description: Used to generate a signature of the event and add it as a request header X-AKENEO-SIGNATURE-SECONDARY, this secret is optional and can be used to rotate the primary secret
+                      type: string
+                      nullable: true
+                      minLength: 16
+                      maxLength: 256
+                headers:
+                  description: Custom HTTP headers sent with each event delivery request (max 5). Header names must contain only alphanumeric characters and hyphens (max 128 chars). Header values are redacted in responses.
+                  type: object
+                  nullable: true
+                  additionalProperties:
+                    type: string
+                    maxLength: 256
+                  maxProperties: 5
+      example:
+        source: pim
+        subject: https://mypim.cloud.akeneo.com
+        events:
+          - com.akeneo.pim.v1.product.deleted
+        type: https
+        config:
+          url: https://my-app.example.com/webhook
+          secret:
+            primary: "my-super-secret-primary-key-123456"
+            secondary: "my-backup-secret-key-789012"
+          headers:
+            X-API-Key: "my-api-key-value"
+    SubscriptionKafkaRequest:
+      description: 'Represents the kafka Subscription configuration request'
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionPartialRequest'
+        - type: object
+          properties:
+            config:
+              type: object
+              properties:
+                broker:
+                  type: string
+                  description: Kafka broker address
+                topic:
+                  type: string
+                  description: Kafka topic name
+                sasl_auth:
+                  type: object
+                  description: SASL authentication details
+                  required:
+                    - mechanism
+                  properties:
+                    mechanism:
+                      type: string
+                      description: SASL authentication mechanism
+                      enum: ["plain"]
+                      example: "plain"
+                    username:
+                      type: string
+                      description: SASL username (required for plain and scram mechanisms)
+                    password:
+                      type: string
+                      description: SASL password (required for plain and scram mechanisms)
+      example:
+        source: pim
+        subject: https://mypim.cloud.akeneo.com
+        events:
+          - com.akeneo.pim.v1.product.created
+          - com.akeneo.pim.v1.product.updated
+        type: kafka
+        config:
+          broker: "kafka-broker1:9092"
+          topic: events-topic
+          sasl_auth:
+            mechanism: plain
+            username: kafka-user
+            password: kafka-password
+    SubscriptionListResponse:
+      type: array
+      description: 'Represents a list of Subscriptions you receive in response'
+      items:
+        anyOf:
+          - $ref: '#/components/schemas/SubscriptionPubSubResponse'
+          - $ref: '#/components/schemas/SubscriptionHTTPSResponse'
+          - $ref: '#/components/schemas/SubscriptionKafkaResponse'
+    SubscriptionPartialRequest:
+      type: object
+      description: 'Represents part of the Subscription you send in the request'
+      properties:
+        source:
+          type: string
+          default: pim
+        subject:
+          type: string
+          format: uri
+          description: Url of the PIM
+        events:
+          type: array
+          description: The list of event types that the subscription is configured to receive.
+          items:
+            type: string
+        type:
+          type: string
+          description: The destination type
+          enum: ["pubsub", "https", "kafka"]
+        send_product_identifier:
+          type: boolean
+          default: false
+          description: If true, includes the product identifier in product events when available (does not apply to product-model events)
+        filter:
+          type: string
+          description: A filter expression to filter events. See https://api.akeneo.com/event-platform/concepts.html#subscription-filters
+      example:
+        source: pim
+        subject: https://mypim.cloud.akeneo.com
+        events:
+          - com.akeneo.pim.v1.product.deleted
+        type: pubsub
+        send_product_identifier: false
+        filter: ""
+    SubscriptionPartialResponse:
+      description: 'Represents part of Subscription data you receive in the response'
+      type: object
+      properties:
+        id:
+          type: string
+          description: The id of the subscription
+          format: uuid
+        subscriber_id:
+          type: string
+          description: The id of the subscriber this subscription is linked to
+          format: uuid
+        status:
+          type: string
+          description: Status of the subscription
+          default: active
+          enum: ["active", "deleted", "revoked", "suspended"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        send_product_identifier:
+          type: boolean
+          default: false
+          description: If true, includes the product identifier in product events when available (does not apply to product-model events)
+        filter:
+          type: string
+          description: A filter expression to filter events. See https://api.akeneo.com/event-platform/concepts.html#subscription-filters
+    SubscriptionPubSubResponse:
+      description: 'Represents the Subscription you receive in the response with a PubSub configuration'
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionPubSubRequest'
+        - $ref: '#/components/schemas/SubscriptionPartialResponse'
+      example:
+        id: '018e1e57-8e96-7695-895e-34bb1f5c0614'
+        subscriber_id: '018e1e57-8e96-7695-895e-34bb1f5c1578'
+        status: active
+        createdAt: '2019-08-24T14:15:22Z'
+        updatedAt: '2020-08-24T14:15:22Z'
+        source: pim
+        subject: https://mypim.cloud.akeneo.com
+        events:
+          - com.akeneo.pim.v1.product.deleted
+        type: pubsub
+        config:
+          project_id: gcp-prd-project-name
+          topic_id: demo-integrations-events
+    SubscriptionHTTPSResponse:
+      description: 'Represents the Subscription you receive in the response with a HTTPS configuration'
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionHTTPSRequest'
+        - $ref: '#/components/schemas/SubscriptionPartialResponse'
+      example:
+        id: '018e1e57-8e96-7695-895e-34bb1f5c0614'
+        subscriber_id: '018e1e57-8e96-7695-895e-34bb1f5c1578'
+        status: active
+        createdAt: '2019-08-24T14:15:22Z'
+        updatedAt: '2020-08-24T14:15:22Z'
+        source: pim
+        subject: https://mypim.cloud.akeneo.com
+        events:
+          - com.akeneo.pim.v1.product.deleted
+        type: https
+        config:
+          url: https://whatever.target
+          secret:
+            primary: aSecretSecret
+          headers:
+            X-API-Key: "***redacted***"
+    SubscriptionKafkaResponse:
+      description: 'Represents the Subscription you receive in the response with a Kafka configuration'
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionKafkaRequest'
+        - $ref: '#/components/schemas/SubscriptionPartialResponse'
+      example:
+        id: '018e1e57-8e96-7695-895e-34bb1f5c0614'
+        subscriber_id: '018e1e57-8e96-7695-895e-34bb1f5c1578'
+        status: active
+        createdAt: '2019-08-24T14:15:22Z'
+        updatedAt: '2020-08-24T14:15:22Z'
+        source: pim
+        subject: https://mypim.cloud.akeneo.com
+        events:
+          - com.akeneo.pim.v1.product.created
+        type: kafka
+        config:
+          broker: "kafka-broker1:9092"
+          topic: events-topic
+          sasl_auth:
+            mechanism: plain
+            username: kafka-user
+            password: "***redacted***"
+    ApiErrorResponse:
+      type: object
+      description: 'Represents the response you will receive in case of error'
+      properties:
+        errors:
+          type: array
+          items:
+            properties:
+              message:
+                type: string
+                description: The detail about the error
+      example:
+        errors: [message: error message]
+    Log:
+      type: object
+      properties:
+        log_id:
+          type: string
+          description: Unique identifier for the log.
+          example: "f32a1b1a-98df-4d5c-9e93-75e213678b3e"
+        log_type:
+          type: string
+          description: Type of the log, either "action" or "error".
+          example: "error"
+          enum: ["action", "error"]
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of when the log was created.
+          example: "2024-11-15T12:34:56Z"
+        subscriber_id:
+          type: string
+          description: Subscriber ID associated with the log.
+          example: "aa0f5c91-41ea-4c06-b3a3-af765e2ab07f"
+        subscription_id:
+          type: string
+          description: Subscription ID associated with the log.
+          example: "72c265f6-22ac-401a-ba75-d1b30c4653e5"
+        error_type:
+          type: string
+          description: The type of error logged (if applicable).
+          example: "validation_error"
+        error_code:
+          type: integer
+          description: HTTP status code or application-specific error code.
+          example: 400
+        error_message:
+          type: string
+          description: A detailed description of the error (if applicable).
+          example: "Invalid request"
+  responses:
+    '400':
+      description: Bad request - the request payload was malformed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+          examples:
+            malformed:
+              value:
+                errors: ["message": "Malformed"]
+    '401':
+      description: Unauthorized - tenant context not found or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+          examples:
+            unauthorized:
+              value:
+                errors: ["message": "Unauthorized"]
+    '403':
+      description: Not allowed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+          examples:
+            notAllowed:
+              value:
+                errors: ["message": "Not allowed to perform this action"]
+    '404':
+      description: Entity not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+          examples:
+            subscriptionNotFound:
+              value:
+                errors: ["message": "Subscription not found"]
+    '409':
+      description: Subscription is deleted
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+          examples:
+            subscriptionDeleted:
+              value:
+                errors: ["message": "Subscription deleted"]
