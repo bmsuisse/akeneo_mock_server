@@ -29,7 +29,7 @@ jobs:
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Git Submodule Update
-        run: git submodule update --init --recursive ; ls pim-api-docs
+        run: git submodule update --init --recursive
       - name: Install dependencies
         run: uv sync --all-extras --all-groups
       - name: Build package
