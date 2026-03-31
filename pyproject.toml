@@ -18,9 +18,10 @@ run = [
 ]
 
 [dependency-groups]
-test = [    
+test = [
     "pytest>=9.0.2",
     "docker>=7.1.0",
+    "py-pglite>=0.5.3",
 ]
 dev = [
     "uvicorn>=0.41.0",
