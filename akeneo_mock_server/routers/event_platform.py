@@ -12,13 +12,13 @@ router = APIRouter(prefix="/api/v1", tags=["event-platform"])
 
 
 @router.get("/subscribers")
-def get_subscribers(db: psycopg.Connection = Depends(get_db)) -> dict[str, list[dict[str, Any]]]:
+def get_subscribers(db: psycopg.Connection = Depends(get_db, scope="function")) -> dict[str, list[dict[str, Any]]]:
     rows = db.execute("SELECT * FROM subscribers").fetchall()
     return {"items": [safe_loads(row["data"]) for row in rows]}
 
 
 @router.get("/subscribers/{subscriber_id}")
-def get_subscriber(subscriber_id: str, db: psycopg.Connection = Depends(get_db)) -> dict[str, Any]:
+def get_subscriber(subscriber_id: str, db: psycopg.Connection = Depends(get_db, scope="function")) -> dict[str, Any]:
     row = db.execute("SELECT * FROM subscribers WHERE id = %s", (subscriber_id,)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Subscriber not found")
@@ -26,7 +26,9 @@ def get_subscriber(subscriber_id: str, db: psycopg.Connection = Depends(get_db))
 
 
 @router.post("/subscribers", status_code=status.HTTP_201_CREATED)
-async def create_subscriber(request: Request, db: psycopg.Connection = Depends(get_db)) -> JSONResponse:
+async def create_subscriber(
+    request: Request, db: psycopg.Connection = Depends(get_db, scope="function")
+) -> JSONResponse:
     data = await safe_json_body(request)
     subscriber_id = data.get("id")
     if not isinstance(subscriber_id, str) or not subscriber_id:
@@ -45,7 +47,9 @@ async def create_subscriber(request: Request, db: psycopg.Connection = Depends(g
 
 
 @router.patch("/subscribers/{subscriber_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def patch_subscriber(subscriber_id: str, request: Request, db: psycopg.Connection = Depends(get_db)) -> Response:
+async def patch_subscriber(
+    subscriber_id: str, request: Request, db: psycopg.Connection = Depends(get_db, scope="function")
+) -> Response:
     data = await safe_json_body(request)
     row = db.execute("SELECT * FROM subscribers WHERE id = %s", (subscriber_id,)).fetchone()
     if row is None:
@@ -60,7 +64,7 @@ async def patch_subscriber(subscriber_id: str, request: Request, db: psycopg.Con
 
 
 @router.delete("/subscribers/{subscriber_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_subscriber(subscriber_id: str, db: psycopg.Connection = Depends(get_db)) -> Response:
+def delete_subscriber(subscriber_id: str, db: psycopg.Connection = Depends(get_db, scope="function")) -> Response:
     if not db.execute("SELECT 1 FROM subscribers WHERE id = %s", (subscriber_id,)).fetchone():
         raise HTTPException(status_code=404, detail="Subscriber not found")
     db.execute("DELETE FROM subscribers WHERE id = %s", (subscriber_id,))
@@ -69,16 +73,19 @@ def delete_subscriber(subscriber_id: str, db: psycopg.Connection = Depends(get_d
 
 
 @router.get("/subscribers/{subscriber_id}/subscriptions")
-def get_subscriptions(subscriber_id: str, db: psycopg.Connection = Depends(get_db)) -> dict[str, list[dict[str, Any]]]:
+def get_subscriptions(
+    subscriber_id: str, db: psycopg.Connection = Depends(get_db, scope="function")
+) -> dict[str, list[dict[str, Any]]]:
     rows = db.execute("SELECT * FROM subscriptions WHERE parent_id = %s", (subscriber_id,)).fetchall()
     return {"items": [safe_loads(row["data"]) for row in rows]}
 
 
 @router.get("/subscribers/{subscriber_id}/subscriptions/{subscription_id}")
-def get_subscription(subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)) -> dict[str, Any]:
+def get_subscription(
+    subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db, scope="function")
+) -> dict[str, Any]:
     row = db.execute(
-        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s",
-        (subscriber_id, subscription_id)
+        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Subscription not found")
@@ -89,22 +96,23 @@ def get_subscription(subscriber_id: str, subscription_id: str, db: psycopg.Conne
     "/subscribers/{subscriber_id}/subscriptions",
     status_code=status.HTTP_201_CREATED,
 )
-async def create_subscription(subscriber_id: str, request: Request, db: psycopg.Connection = Depends(get_db)) -> JSONResponse:
+async def create_subscription(
+    subscriber_id: str, request: Request, db: psycopg.Connection = Depends(get_db, scope="function")
+) -> JSONResponse:
     data = await safe_json_body(request)
     subscription_id = data.get("id")
     if not isinstance(subscription_id, str) or not subscription_id:
         raise HTTPException(status_code=422, detail="Missing 'id' field in payload")
 
     existing = db.execute(
-        "SELECT 1 FROM subscriptions WHERE parent_id = %s AND id = %s",
-        (subscriber_id, subscription_id)
+        "SELECT 1 FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
     ).fetchone()
     if existing is not None:
         raise HTTPException(status_code=409, detail="Subscription already exists")
 
     db.execute(
         "INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s)",
-        (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, json.dumps(data))
+        (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, json.dumps(data)),
     )
     db.commit()
 
@@ -123,25 +131,24 @@ async def patch_subscription(
     subscriber_id: str,
     subscription_id: str,
     request: Request,
-    db: psycopg.Connection = Depends(get_db),
+    db: psycopg.Connection = Depends(get_db, scope="function"),
 ) -> Response:
     data = await safe_json_body(request)
     row = db.execute(
-        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s",
-        (subscriber_id, subscription_id)
+        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
     ).fetchone()
     if row is None:
         data["id"] = subscription_id
         db.execute(
             "INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s)",
-            (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, json.dumps(data))
+            (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, json.dumps(data)),
         )
     else:
         existing = safe_loads(row["data"])
         existing.update(data)
         db.execute(
             "UPDATE subscriptions SET data = %s WHERE pk = %s",
-            (json.dumps(existing), f"{subscriber_id}/{subscription_id}")
+            (json.dumps(existing), f"{subscriber_id}/{subscription_id}"),
         )
 
     db.commit()
@@ -152,10 +159,11 @@ async def patch_subscription(
     "/subscribers/{subscriber_id}/subscriptions/{subscription_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_subscription(subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)) -> Response:
+def delete_subscription(
+    subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db, scope="function")
+) -> Response:
     row = db.execute(
-        "SELECT 1 FROM subscriptions WHERE parent_id = %s AND id = %s",
-        (subscriber_id, subscription_id)
+        "SELECT 1 FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Subscription not found")

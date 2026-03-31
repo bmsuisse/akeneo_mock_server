@@ -145,6 +145,7 @@ schema.raw_schema = schemathesis.openapi.from_path(SCHEMA_PATH).raw_schema
 
 from hypothesis import settings, HealthCheck
 
+
 @schema.parametrize()
 @settings(
     max_examples=MAX_EXAMPLES,
