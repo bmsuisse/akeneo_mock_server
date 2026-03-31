@@ -2,7 +2,7 @@ import os
 import socket
 import sys
 
-sys.modules.setdefault("psycopg_binary", None)  # type: ignore[assignment]
+sys.modules.setdefault("psycopg_binary", None)  # type: ignore[assignment]  # psycopg_binary C ext segfaults with PGlite WASM
 sys.modules.setdefault("psycopg_binary._psycopg", None)  # type: ignore[assignment]
 
 import psycopg
@@ -55,7 +55,7 @@ def postgres_container():
 @pytest.fixture(scope="session", autouse=True)
 def init_db_once(postgres_container):
     """Create tables/indexes once per session to avoid per-test DDL lock contention."""
-    os.environ["AKENEO_POOL_MIN_SIZE"] = "0"
+    os.environ["AKENEO_POOL_MIN_SIZE"] = "0"  # py-pglite supports only one connection at a time
     os.environ["AKENEO_POOL_MAX_SIZE"] = "1"
     from akeneo_mock_server.database import init_db
 

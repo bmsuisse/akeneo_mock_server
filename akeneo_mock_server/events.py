@@ -13,7 +13,7 @@ def get_entity_event_name(entity_name: str, action: str) -> str:
 
 
 async def dispatch_event(event_name: str, resource_data: dict[str, Any]) -> None:
-    def _collect_subscribers() -> list[tuple[str, str, Any]]:
+    def _collect_subscribers() -> list[str]:
         with database.get_db_pool().connection() as conn:
             subscribers = conn.execute("SELECT * FROM subscribers").fetchall()
             result = []
