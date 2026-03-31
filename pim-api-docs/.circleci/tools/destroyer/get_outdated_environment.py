@@ -13,11 +13,7 @@ def get_outdated_environments(credentials, bucket_name, open_pull_requests):
     outdated_environments = []
     for blob in bucket.list_blobs():
         environment = blob.name.split("/")[1]
-        if (
-            environment != "dev"
-            and "pr-" in environment
-            and environment not in open_pull_requests
-        ):
+        if environment != "dev" and "pr-" in environment and environment not in open_pull_requests:
             outdated_environments.append(environment)
     return outdated_environments
 
@@ -26,8 +22,7 @@ def get_open_pull_requests(access_token, username, reponame):
     g = Github(access_token)
     repo = g.get_repo(f"{username}/{reponame}")
     return [
-        f"pr-{pull_request.number}"
-        for pull_request in repo.get_pulls(state="open", sort="created", base="master")
+        f"pr-{pull_request.number}" for pull_request in repo.get_pulls(state="open", sort="created", base="master")
     ]
 
 
@@ -35,8 +30,7 @@ if __name__ == "__main__":
     try:
         bucket_name = settings.settings.terraform_bucket_name
         credentials = Credentials(
-            token=os.environ["GOOGLE_OAUTH_ACCESS_TOKEN"],
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            token=os.environ["GOOGLE_OAUTH_ACCESS_TOKEN"], scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )
 
         GITHUB_ACCESS_TOKEN = os.environ["GITHUB_ACCESS_TOKEN"]

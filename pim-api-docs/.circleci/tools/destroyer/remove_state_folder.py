@@ -27,7 +27,6 @@ if __name__ == "__main__":
         bucket_name = settings.settings.terraform_bucket_name
 
         credentials = Credentials(
-            token=os.environ["GOOGLE_OAUTH_ACCESS_TOKEN"],
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            token=os.environ["GOOGLE_OAUTH_ACCESS_TOKEN"], scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )
         remove_state_folder(credentials, bucket_name, pull_request_id)

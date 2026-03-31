@@ -53,7 +53,11 @@ def create_app() -> FastAPI:
             logging.error("Unhandled error escaped middleware: %s: %s", type(exc).__name__, exc)
             return JSONResponse(
                 status_code=422,
-                content={"code": 422, "message": "Unprocessable Entity", "details": _build_internal_error_details(exc)},
+                content={
+                    "code": 422,
+                    "message": "Unprocessable Entity",
+                    "details": _build_internal_error_details(exc),
+                },
             )
 
     @app.exception_handler(PatchTypeError)

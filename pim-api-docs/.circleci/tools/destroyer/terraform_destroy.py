@@ -18,7 +18,7 @@ def docker_streamer(terraform_handler):
 
 @docker_streamer
 def terraform_handler(terraform_version, sources_path, command):
-    token = os.getenv('GOOGLE_OAUTH_ACCESS_TOKEN', '')
+    token = os.getenv("GOOGLE_OAUTH_ACCESS_TOKEN", "")
 
     return client.containers.run(
         f"hashicorp/terraform:{terraform_version}",
@@ -39,9 +39,7 @@ if __name__ == "__main__":
     parser.add_argument("--stage", help="Stage", required=True)
     parser.add_argument("--app_version", help="Application Version", required=True)
     parser.add_argument("--pull_request", help="Pull Request?", required=True)
-    parser.add_argument(
-        "--pull_request_id", help="ID of the Pull Request", required=True
-    )
+    parser.add_argument("--pull_request_id", help="ID of the Pull Request", required=True)
     args = parser.parse_args()
 
     project_id = settings.settings.gcp_project_id
