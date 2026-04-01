@@ -10,12 +10,14 @@ class PatchTypeError(Exception):
         super().__init__(message)
 
 
-def safe_loads(data_str: str) -> dict[str, Any]:
+def safe_loads(data_str: str | dict | Any) -> dict[str, Any]:
     if not data_str:
         return {}
+    if isinstance(data_str, dict):
+        return data_str
     try:
         parsed = json.loads(data_str)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, TypeError):
         return {}
     if isinstance(parsed, dict):
         return parsed

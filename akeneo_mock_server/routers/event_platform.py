@@ -1,5 +1,5 @@
-import json
 import psycopg
+from psycopg.types.json import Jsonb
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -34,7 +34,7 @@ async def create_subscriber(request: Request, db: psycopg.Connection = Depends(g
     if db.execute("SELECT 1 FROM subscribers WHERE id = %s", (subscriber_id,)).fetchone():
         raise HTTPException(status_code=409, detail="Subscriber already exists")
 
-    db.execute("INSERT INTO subscribers (id, data) VALUES (%s, %s)", (subscriber_id, json.dumps(data)))
+    db.execute("INSERT INTO subscribers (id, data) VALUES (%s, %s)", (subscriber_id, Jsonb(data)))
     db.commit()
 
     headers = {
@@ -50,11 +50,11 @@ async def patch_subscriber(subscriber_id: str, request: Request, db: psycopg.Con
     row = db.execute("SELECT * FROM subscribers WHERE id = %s", (subscriber_id,)).fetchone()
     if row is None:
         data["id"] = subscriber_id
-        db.execute("INSERT INTO subscribers (id, data) VALUES (%s, %s)", (subscriber_id, json.dumps(data)))
+        db.execute("INSERT INTO subscribers (id, data) VALUES (%s, %s)", (subscriber_id, Jsonb(data)))
     else:
         existing = safe_loads(row["data"])
         existing.update(data)
-        db.execute("UPDATE subscribers SET data = %s WHERE id = %s", (json.dumps(existing), subscriber_id))
+        db.execute("UPDATE subscribers SET data = %s WHERE id = %s", (Jsonb(existing), subscriber_id))
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -104,7 +104,7 @@ async def create_subscription(subscriber_id: str, request: Request, db: psycopg.
 
     db.execute(
         "INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s)",
-        (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, json.dumps(data))
+        (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, Jsonb(data))
     )
     db.commit()
 
@@ -134,14 +134,14 @@ async def patch_subscription(
         data["id"] = subscription_id
         db.execute(
             "INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s)",
-            (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, json.dumps(data))
+            (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, Jsonb(data))
         )
     else:
         existing = safe_loads(row["data"])
         existing.update(data)
         db.execute(
             "UPDATE subscriptions SET data = %s WHERE pk = %s",
-            (json.dumps(existing), f"{subscriber_id}/{subscription_id}")
+            (Jsonb(existing), f"{subscriber_id}/{subscription_id}")
         )
 
     db.commit()
