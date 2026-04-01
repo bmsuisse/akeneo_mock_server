@@ -1,7 +1,9 @@
+import os
+import time
 import psycopg
 from psycopg.rows import dict_row
-from py_pglite import PGliteManager, PGliteConfig
-from typing import Any, Generator
+from contextlib import contextmanager
+from typing import Any, Generator, Iterator
 from pydantic import BaseModel, Field
 from pathlib import Path
 import threading
@@ -9,19 +11,50 @@ import threading
 SCHEMA_SQL_PATH = Path(__file__).with_name("schema.sql")
 _PGLITE_WORK_DIR = Path(__file__).parent.parent / "py-pglite-work"
 
-_pglite_manager: PGliteManager | None = None
-_db_connection: psycopg.Connection | None = None
-_init_lock = threading.Lock()
+# PGlite state (used when AKENEO_DATABASE_URL is not set)
+_pglite_manager = None
+_pglite_connection: psycopg.Connection | None = None
+_pglite_lock = threading.Lock()
+
+# PostgreSQL pool state (used when AKENEO_DATABASE_URL is set)
+_pg_pool = None
+_pg_pool_url: str | None = None
 
 
-def _ensure_initialized() -> psycopg.Connection:
-    global _pglite_manager, _db_connection
-    if _db_connection is not None:
-        return _db_connection
+def _pg_url() -> str | None:
+    return os.environ.get("AKENEO_DATABASE_URL")
 
-    with _init_lock:
-        if _db_connection is not None:
-            return _db_connection
+
+def _get_pg_pool():
+    global _pg_pool, _pg_pool_url
+    from psycopg_pool import ConnectionPool
+
+    url = _pg_url()
+    if _pg_pool is not None and _pg_pool_url == url:
+        return _pg_pool
+    if _pg_pool is not None:
+        _pg_pool.close()
+    _pg_pool = ConnectionPool(
+        conninfo=url,
+        min_size=1,
+        max_size=20,
+        kwargs={"row_factory": dict_row},
+        open=True,
+    )
+    _pg_pool_url = url
+    return _pg_pool
+
+
+def _ensure_pglite() -> psycopg.Connection:
+    global _pglite_manager, _pglite_connection
+    if _pglite_connection is not None:
+        return _pglite_connection
+
+    with _pglite_lock:
+        if _pglite_connection is not None:
+            return _pglite_connection
+
+        from py_pglite import PGliteManager, PGliteConfig
 
         config = PGliteConfig(work_dir=_PGLITE_WORK_DIR, use_tcp=True, tcp_port=15432)
         manager = PGliteManager(config=config)
@@ -30,26 +63,49 @@ def _ensure_initialized() -> psycopg.Connection:
         uri = manager.get_psycopg_uri()
         conn = psycopg.connect(uri, row_factory=dict_row)
 
-        statements = SCHEMA_SQL_PATH.read_text(encoding="utf-8").split(";")
-        for statement in statements:
-            normalized = statement.strip()
-            if normalized:
-                conn.execute(normalized)
-        conn.commit()
+        _run_schema(conn)
 
         _pglite_manager = manager
-        _db_connection = conn
+        _pglite_connection = conn
         return conn
 
 
+def _run_schema(conn: psycopg.Connection) -> None:
+    statements = SCHEMA_SQL_PATH.read_text(encoding="utf-8").split(";")
+    for statement in statements:
+        normalized = statement.strip()
+        if normalized:
+            conn.execute(normalized)
+    conn.commit()
+
+
+def init_db() -> None:
+    if _pg_url():
+        retries = 10
+        while retries > 0:
+            try:
+                conn = psycopg.connect(_pg_url(), row_factory=dict_row)
+                _run_schema(conn)
+                conn.close()
+                return
+            except Exception as e:
+                print(f"PostgreSQL not ready, retrying ({retries} left)... {e}")
+                retries -= 1
+                time.sleep(2)
+        raise Exception("Could not connect to PostgreSQL")
+    else:
+        _ensure_pglite()
+
+
 def close_db_pool() -> None:
-    global _pglite_manager, _db_connection
-    if _db_connection is not None:
+    global _pglite_manager, _pglite_connection, _pg_pool, _pg_pool_url
+
+    if _pglite_connection is not None:
         try:
-            _db_connection.close()
+            _pglite_connection.close()
         except Exception:
             pass
-        _db_connection = None
+        _pglite_connection = None
     if _pglite_manager is not None:
         try:
             _pglite_manager.stop()
@@ -57,26 +113,39 @@ def close_db_pool() -> None:
             pass
         _pglite_manager = None
 
+    if _pg_pool is not None:
+        try:
+            _pg_pool.close()
+        except Exception:
+            pass
+        _pg_pool = None
+        _pg_pool_url = None
 
-def get_connection() -> psycopg.Connection:
-    return _ensure_initialized()
 
-
-def init_db() -> None:
-    _ensure_initialized()
+@contextmanager
+def get_connection() -> Iterator[psycopg.Connection]:
+    if _pg_url():
+        with _get_pg_pool().connection() as conn:
+            yield conn
+    else:
+        yield _ensure_pglite()
 
 
 def get_db() -> Generator[psycopg.Connection, None, None]:
-    conn = _ensure_initialized()
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
+    if _pg_url():
+        with _get_pg_pool().connection() as conn:
+            yield conn
+    else:
+        conn = _ensure_pglite()
         try:
-            conn.rollback()
+            yield conn
+            conn.commit()
         except Exception:
-            pass
-        raise
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
 
 
 class EntityBase(BaseModel):
