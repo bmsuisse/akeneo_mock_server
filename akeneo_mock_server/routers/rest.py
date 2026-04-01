@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 import psycopg
+from psycopg.types.json import Jsonb
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -376,14 +377,14 @@ def _upsert_item(db: psycopg.Connection, table: str, pk_field: str, code: str, d
     if table in tables_with_data:
         if parent_id:
             sql = f'INSERT INTO "{table}" (id, parent_id, data) VALUES (%s, %s, %s) ON CONFLICT (id) DO UPDATE SET parent_id = EXCLUDED.parent_id, data = EXCLUDED.data'
-            db.execute(sql, (code, parent_id, json.dumps(data)))
+            db.execute(sql, (code, parent_id, Jsonb(data)))
         else:
             sql = f'INSERT INTO "{table}" (id, data) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data'
-            db.execute(sql, (code, json.dumps(data)))
+            db.execute(sql, (code, Jsonb(data)))
     elif table == "subscriptions":
          pk = f"{parent_id}/{code}"
          sql = 'INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s) ON CONFLICT (pk) DO UPDATE SET id = EXCLUDED.id, parent_id = EXCLUDED.parent_id, data = EXCLUDED.data'
-         db.execute(sql, (pk, code, parent_id, json.dumps(data)))
+         db.execute(sql, (pk, code, parent_id, Jsonb(data)))
     else:
         columns = []
         placeholders = []
@@ -405,7 +406,7 @@ def _upsert_item(db: psycopg.Connection, table: str, pk_field: str, code: str, d
             columns.append(f'"{k}"')
             placeholders.append("%s")
             if isinstance(v, (dict, list)):
-                values.append(json.dumps(v))
+                values.append(Jsonb(v))
             else:
                 col_type = column_types.get(k, "")
                 values.append(_convert_value_to_type(v, col_type))
