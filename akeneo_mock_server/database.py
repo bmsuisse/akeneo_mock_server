@@ -1,55 +1,83 @@
 import psycopg
 from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
+from py_pglite import PGliteManager, PGliteConfig
 from typing import Any, Generator
 from pydantic import BaseModel, Field
 from pathlib import Path
-import time
-
-import os
+import threading
 
 SCHEMA_SQL_PATH = Path(__file__).with_name("schema.sql")
-_db_pool: ConnectionPool | None = None
-_db_pool_url: str | None = None
+_PGLITE_WORK_DIR = Path(__file__).parent.parent / "py-pglite-work"
 
-def get_db_url():
-    return os.environ.get("AKENEO_DATABASE_URL", "postgresql://akeneo:akeneo@localhost:54327/akeneo")
+_pglite_manager: PGliteManager | None = None
+_db_connection: psycopg.Connection | None = None
+_init_lock = threading.Lock()
 
 
-def get_db_pool() -> ConnectionPool:
-    global _db_pool
-    global _db_pool_url
+def _ensure_initialized() -> psycopg.Connection:
+    global _pglite_manager, _db_connection
+    if _db_connection is not None:
+        return _db_connection
 
-    db_url = get_db_url()
-    if _db_pool is not None and _db_pool_url == db_url:
-        return _db_pool
+    with _init_lock:
+        if _db_connection is not None:
+            return _db_connection
 
-    if _db_pool is not None:
-        _db_pool.close()
+        config = PGliteConfig(work_dir=_PGLITE_WORK_DIR, use_tcp=True, tcp_port=15432)
+        manager = PGliteManager(config=config)
+        manager.start()
 
-    _db_pool = ConnectionPool(
-        conninfo=db_url,
-        min_size=1,
-        max_size=20,
-        kwargs={"row_factory": dict_row},
-        open=True,
-    )
-    _db_pool_url = db_url
-    return _db_pool
+        uri = manager.get_psycopg_uri()
+        conn = psycopg.connect(uri, row_factory=dict_row)
+
+        statements = SCHEMA_SQL_PATH.read_text(encoding="utf-8").split(";")
+        for statement in statements:
+            normalized = statement.strip()
+            if normalized:
+                conn.execute(normalized)
+        conn.commit()
+
+        _pglite_manager = manager
+        _db_connection = conn
+        return conn
 
 
 def close_db_pool() -> None:
-    global _db_pool
-    global _db_pool_url
+    global _pglite_manager, _db_connection
+    if _db_connection is not None:
+        try:
+            _db_connection.close()
+        except Exception:
+            pass
+        _db_connection = None
+    if _pglite_manager is not None:
+        try:
+            _pglite_manager.stop()
+        except Exception:
+            pass
+        _pglite_manager = None
 
-    if _db_pool is not None:
-        _db_pool.close()
-    _db_pool = None
-    _db_pool_url = None
 
-def get_connection():
-    conn = psycopg.connect(get_db_url(), row_factory=dict_row)
-    return conn
+def get_connection() -> psycopg.Connection:
+    return _ensure_initialized()
+
+
+def init_db() -> None:
+    _ensure_initialized()
+
+
+def get_db() -> Generator[psycopg.Connection, None, None]:
+    conn = _ensure_initialized()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+
 
 class EntityBase(BaseModel):
     id: str | None = None
@@ -319,51 +347,23 @@ SUB_MODELS = {
     },
 }
 
-def init_db():
-    retries = 10
-    conn = None
-    while retries > 0:
-        try:
-            conn = get_connection()
-            break
-        except Exception as e:
-            print(f"PostgreSQL not ready, retrying ({retries} left)... {e}")
-            retries -= 1
-            time.sleep(2)
-
-    if conn is None:
-        raise Exception("Could not connect to PostgreSQL")
-
-    statements = SCHEMA_SQL_PATH.read_text(encoding="utf-8").split(";")
-    for statement in statements:
-        normalized_statement = statement.strip()
-        if normalized_statement:
-            conn.execute(normalized_statement)
-
-    conn.commit()
-    conn.close()
-
-def get_db() -> Generator[psycopg.Connection, None, None]:
-    with get_db_pool().connection() as conn:
-        yield conn
 
 # Helper for Session-like behavior if needed, but we'll use raw connections.
 class SessionShim:
     def __init__(self, conn: psycopg.Connection):
         self.conn = conn
-    
+
     def exec(self, query: Any):
-        # This will be updated to handle sqlglot queries
         pass
-    
+
     def add(self, item: Any):
         pass
-    
+
     def commit(self):
         self.conn.commit()
-    
+
     def rollback(self):
         self.conn.rollback()
-    
+
     def close(self):
         self.conn.close()
