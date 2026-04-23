@@ -305,3 +305,342 @@ class TestEdgeCases:
         _create_attribute("range_num3", "pim_catalog_number", number_min="0", number_max="100")
         res = _create_product("p-range-high", {"range_num3": _value("101")})
         assert res.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Data-type format restrictions (per products.md "The data format" section)
+# ---------------------------------------------------------------------------
+
+
+def _patch_product(identifier: str, values: dict):
+    return client.patch(
+        f"/api/rest/v1/products/{identifier}",
+        json={"values": values},
+    )
+
+
+class TestTextFormatRestriction:
+    def test_non_string_data_for_text_returns_422(self):
+        _create_attribute("text_fmt_1", "pim_catalog_text")
+        res = _create_product("p-textfmt-1", {"text_fmt_1": _value(42)})
+        assert res.status_code == 422
+
+    def test_non_string_data_for_textarea_returns_422(self):
+        _create_attribute("textarea_fmt_1", "pim_catalog_textarea")
+        res = _create_product("p-textareafmt-1", {"textarea_fmt_1": _value(True)})
+        assert res.status_code == 422
+
+    def test_string_data_for_text_succeeds(self):
+        _create_attribute("text_fmt_2", "pim_catalog_text")
+        res = _create_product("p-textfmt-2", {"text_fmt_2": _value("hello")})
+        assert res.status_code == 201
+
+    def test_patch_non_string_data_for_text_returns_422(self):
+        _create_attribute("text_fmt_3", "pim_catalog_text")
+        client.post("/api/rest/v1/products", json={"identifier": "p-textfmt-patch"})
+        res = _patch_product("p-textfmt-patch", {"text_fmt_3": _value({"not": "a string"})})
+        assert res.status_code == 422
+
+
+class TestMediaFileFormatRestriction:
+    def test_non_string_data_for_file_returns_422(self):
+        _create_attribute("file_fmt_1", "pim_catalog_file")
+        res = _create_product("p-filefmt-1", {"file_fmt_1": _value(123)})
+        assert res.status_code == 422
+
+    def test_non_string_data_for_image_returns_422(self):
+        _create_attribute("img_fmt_1", "pim_catalog_image")
+        res = _create_product("p-imgfmt-1", {"img_fmt_1": _value(["list"])})
+        assert res.status_code == 422
+
+    def test_string_data_for_file_succeeds(self):
+        _create_attribute("file_fmt_2", "pim_catalog_file")
+        res = _create_product("p-filefmt-2", {"file_fmt_2": _value("a/b/c/myfile.pdf")})
+        assert res.status_code == 201
+
+    def test_patch_non_string_data_for_image_returns_422(self):
+        _create_attribute("img_fmt_2", "pim_catalog_image")
+        client.post("/api/rest/v1/products", json={"identifier": "p-imgfmt-patch"})
+        res = _patch_product("p-imgfmt-patch", {"img_fmt_2": _value(0)})
+        assert res.status_code == 422
+
+
+class TestDateFormatRestriction:
+    def test_non_string_data_for_date_returns_422(self):
+        _create_attribute("date_fmt_1", "pim_catalog_date")
+        res = _create_product("p-datefmt-1", {"date_fmt_1": _value(20210101)})
+        assert res.status_code == 422
+
+    def test_dict_data_for_date_returns_422(self):
+        _create_attribute("date_fmt_2", "pim_catalog_date")
+        res = _create_product("p-datefmt-2", {"date_fmt_2": _value({"year": 2021})})
+        assert res.status_code == 422
+
+    def test_string_data_for_date_succeeds(self):
+        _create_attribute("date_fmt_3", "pim_catalog_date")
+        res = _create_product("p-datefmt-3", {"date_fmt_3": _value("2021-04-29T08:58:00.101Z")})
+        assert res.status_code == 201
+
+    def test_patch_non_string_data_for_date_returns_422(self):
+        _create_attribute("date_fmt_4", "pim_catalog_date")
+        client.post("/api/rest/v1/products", json={"identifier": "p-datefmt-patch"})
+        res = _patch_product("p-datefmt-patch", {"date_fmt_4": _value(False)})
+        assert res.status_code == 422
+
+
+class TestSimpleSelectFormatRestriction:
+    def test_non_string_data_for_simpleselect_returns_422(self):
+        _create_attribute("ss_fmt_1", "pim_catalog_simpleselect")
+        res = _create_product("p-ssfmt-1", {"ss_fmt_1": _value(["blue"])})
+        assert res.status_code == 422
+
+    def test_string_data_for_simpleselect_succeeds(self):
+        _create_attribute("ss_fmt_2", "pim_catalog_simpleselect")
+        res = _create_product("p-ssfmt-2", {"ss_fmt_2": _value("blue")})
+        assert res.status_code == 201
+
+    def test_non_string_data_for_ref_data_simpleselect_returns_422(self):
+        _create_attribute("rds_fmt_1", "pim_catalog_reference_data_simpleselect")
+        res = _create_product("p-rdsfmt-1", {"rds_fmt_1": _value(99)})
+        assert res.status_code == 422
+
+    def test_non_string_data_for_ref_entity_returns_422(self):
+        _create_attribute("re_fmt_1", "akeneo_reference_entity")
+        res = _create_product("p-refent-1", {"re_fmt_1": _value({"code": "x"})})
+        assert res.status_code == 422
+
+    def test_patch_non_string_data_for_simpleselect_returns_422(self):
+        _create_attribute("ss_fmt_3", "pim_catalog_simpleselect")
+        client.post("/api/rest/v1/products", json={"identifier": "p-ssfmt-patch"})
+        res = _patch_product("p-ssfmt-patch", {"ss_fmt_3": _value(True)})
+        assert res.status_code == 422
+
+
+class TestMultiSelectFormatRestriction:
+    def test_non_list_data_for_multiselect_returns_422(self):
+        _create_attribute("ms_fmt_1", "pim_catalog_multiselect")
+        res = _create_product("p-msfmt-1", {"ms_fmt_1": _value("leather")})
+        assert res.status_code == 422
+
+    def test_list_with_non_strings_for_multiselect_returns_422(self):
+        _create_attribute("ms_fmt_2", "pim_catalog_multiselect")
+        res = _create_product("p-msfmt-2", {"ms_fmt_2": _value(["leather", 42])})
+        assert res.status_code == 422
+
+    def test_list_of_strings_for_multiselect_succeeds(self):
+        _create_attribute("ms_fmt_3", "pim_catalog_multiselect")
+        res = _create_product("p-msfmt-3", {"ms_fmt_3": _value(["leather", "cotton"])})
+        assert res.status_code == 201
+
+    def test_non_list_data_for_ref_data_multiselect_returns_422(self):
+        _create_attribute("rdm_fmt_1", "pim_catalog_reference_data_multiselect")
+        res = _create_product("p-rdmfmt-1", {"rdm_fmt_1": _value("single_code")})
+        assert res.status_code == 422
+
+    def test_non_list_data_for_ref_entity_collection_returns_422(self):
+        _create_attribute("rec_fmt_1", "akeneo_reference_entity_collection")
+        res = _create_product("p-recfmt-1", {"rec_fmt_1": _value("single")})
+        assert res.status_code == 422
+
+    def test_non_list_data_for_asset_collection_returns_422(self):
+        _create_attribute("ac_fmt_1", "pim_catalog_asset_collection")
+        res = _create_product("p-acfmt-1", {"ac_fmt_1": _value("asset_code")})
+        assert res.status_code == 422
+
+    def test_list_of_strings_for_asset_collection_succeeds(self):
+        _create_attribute("ac_fmt_2", "pim_catalog_asset_collection")
+        res = _create_product("p-acfmt-2", {"ac_fmt_2": _value(["asset_a", "asset_b"])})
+        assert res.status_code == 201
+
+    def test_patch_non_list_for_multiselect_returns_422(self):
+        _create_attribute("ms_fmt_4", "pim_catalog_multiselect")
+        client.post("/api/rest/v1/products", json={"identifier": "p-msfmt-patch"})
+        res = _patch_product("p-msfmt-patch", {"ms_fmt_4": _value("not_a_list")})
+        assert res.status_code == 422
+
+
+class TestMetricFormatRestriction:
+    def test_non_object_data_for_metric_returns_422(self):
+        _create_attribute("metric_fmt_1", "pim_catalog_metric")
+        res = _create_product("p-metfmt-1", {"metric_fmt_1": _value("800 GRAM")})
+        assert res.status_code == 422
+
+    def test_list_data_for_metric_returns_422(self):
+        _create_attribute("metric_fmt_2", "pim_catalog_metric")
+        res = _create_product("p-metfmt-2", {"metric_fmt_2": _value([800, "GRAM"])})
+        assert res.status_code == 422
+
+    def test_object_missing_unit_returns_422(self):
+        _create_attribute("metric_fmt_3", "pim_catalog_metric")
+        res = _create_product("p-metfmt-3", {"metric_fmt_3": _value({"amount": "800.0"})})
+        assert res.status_code == 422
+
+    def test_object_missing_amount_returns_422(self):
+        _create_attribute("metric_fmt_4", "pim_catalog_metric")
+        res = _create_product("p-metfmt-4", {"metric_fmt_4": _value({"unit": "GRAM"})})
+        assert res.status_code == 422
+
+    def test_valid_metric_object_succeeds(self):
+        _create_attribute("metric_fmt_5", "pim_catalog_metric")
+        res = _create_product("p-metfmt-5", {"metric_fmt_5": _value({"amount": "800.0", "unit": "GRAM"})})
+        assert res.status_code == 201
+
+    def test_valid_metric_with_integer_amount_succeeds(self):
+        _create_attribute("metric_fmt_6", "pim_catalog_metric")
+        res = _create_product("p-metfmt-6", {"metric_fmt_6": _value({"amount": 10, "unit": "KILOWATT"})})
+        assert res.status_code == 201
+
+    def test_patch_non_object_metric_returns_422(self):
+        _create_attribute("metric_fmt_7", "pim_catalog_metric")
+        client.post("/api/rest/v1/products", json={"identifier": "p-metfmt-patch"})
+        res = _patch_product("p-metfmt-patch", {"metric_fmt_7": _value(42)})
+        assert res.status_code == 422
+
+
+class TestPriceFormatRestriction:
+    def test_non_list_data_for_price_returns_422(self):
+        _create_attribute("price_fmt_1", "pim_catalog_price")
+        res = _create_product("p-pricefmt-1", {"price_fmt_1": _value({"amount": 200, "currency": "USD"})})
+        assert res.status_code == 422
+
+    def test_list_with_non_object_for_price_returns_422(self):
+        _create_attribute("price_fmt_2", "pim_catalog_price")
+        res = _create_product("p-pricefmt-2", {"price_fmt_2": _value([200])})
+        assert res.status_code == 422
+
+    def test_price_object_missing_currency_returns_422(self):
+        _create_attribute("price_fmt_3", "pim_catalog_price")
+        res = _create_product("p-pricefmt-3", {"price_fmt_3": _value([{"amount": 200}])})
+        assert res.status_code == 422
+
+    def test_price_object_missing_amount_returns_422(self):
+        _create_attribute("price_fmt_4", "pim_catalog_price")
+        res = _create_product("p-pricefmt-4", {"price_fmt_4": _value([{"currency": "USD"}])})
+        assert res.status_code == 422
+
+    def test_valid_price_list_succeeds(self):
+        _create_attribute("price_fmt_5", "pim_catalog_price")
+        res = _create_product("p-pricefmt-5", {"price_fmt_5": _value([{"amount": 200, "currency": "USD"}])})
+        assert res.status_code == 201
+
+    def test_valid_price_string_amount_succeeds(self):
+        _create_attribute("price_fmt_6", "pim_catalog_price")
+        res = _create_product("p-pricefmt-6", {"price_fmt_6": _value([{"amount": "25.50", "currency": "EUR"}])})
+        assert res.status_code == 201
+
+    def test_patch_non_list_price_returns_422(self):
+        _create_attribute("price_fmt_7", "pim_catalog_price")
+        client.post("/api/rest/v1/products", json={"identifier": "p-pricefmt-patch"})
+        res = _patch_product("p-pricefmt-patch", {"price_fmt_7": _value("25.50 EUR")})
+        assert res.status_code == 422
+
+
+class TestBooleanFormatRestriction:
+    def test_string_data_for_boolean_returns_422(self):
+        _create_attribute("bool_fmt_1", "pim_catalog_boolean")
+        res = _create_product("p-boolfmt-1", {"bool_fmt_1": _value("true")})
+        assert res.status_code == 422
+
+    def test_integer_data_for_boolean_returns_422(self):
+        _create_attribute("bool_fmt_2", "pim_catalog_boolean")
+        res = _create_product("p-boolfmt-2", {"bool_fmt_2": _value(1)})
+        assert res.status_code == 422
+
+    def test_true_boolean_succeeds(self):
+        _create_attribute("bool_fmt_3", "pim_catalog_boolean")
+        res = _create_product("p-boolfmt-3", {"bool_fmt_3": _value(True)})
+        assert res.status_code == 201
+
+    def test_false_boolean_succeeds(self):
+        _create_attribute("bool_fmt_4", "pim_catalog_boolean")
+        res = _create_product("p-boolfmt-4", {"bool_fmt_4": _value(False)})
+        assert res.status_code == 201
+
+    def test_patch_string_for_boolean_returns_422(self):
+        _create_attribute("bool_fmt_5", "pim_catalog_boolean")
+        client.post("/api/rest/v1/products", json={"identifier": "p-boolfmt-patch"})
+        res = _patch_product("p-boolfmt-patch", {"bool_fmt_5": _value("false")})
+        assert res.status_code == 422
+
+
+class TestTableFormatRestriction:
+    def test_non_list_data_for_table_returns_422(self):
+        _create_attribute("table_fmt_1", "pim_catalog_table")
+        res = _create_product("p-tablefmt-1", {"table_fmt_1": _value({"key": "value"})})
+        assert res.status_code == 422
+
+    def test_list_with_non_object_row_returns_422(self):
+        _create_attribute("table_fmt_2", "pim_catalog_table")
+        res = _create_product("p-tablefmt-2", {"table_fmt_2": _value([{"col": "val"}, "not_an_object"])})
+        assert res.status_code == 422
+
+    def test_valid_table_list_of_objects_succeeds(self):
+        _create_attribute("table_fmt_3", "pim_catalog_table")
+        res = _create_product(
+            "p-tablefmt-3",
+            {"table_fmt_3": _value([{"composition": "wheat", "percentage": "28.5"}, {"composition": "vegetables"}])},
+        )
+        assert res.status_code == 201
+
+    def test_patch_non_list_for_table_returns_422(self):
+        _create_attribute("table_fmt_4", "pim_catalog_table")
+        client.post("/api/rest/v1/products", json={"identifier": "p-tablefmt-patch"})
+        res = _patch_product("p-tablefmt-patch", {"table_fmt_4": _value("not a table")})
+        assert res.status_code == 422
+
+
+class TestProductLinkFormatRestriction:
+    def test_non_object_data_for_product_link_returns_422(self):
+        _create_attribute("pl_fmt_1", "pim_catalog_product_link")
+        res = _create_product("p-plfmt-1", {"pl_fmt_1": _value("fc24e6c3-933c-4a93-8a81-e5c703d134d5")})
+        assert res.status_code == 422
+
+    def test_invalid_type_field_returns_422(self):
+        _create_attribute("pl_fmt_2", "pim_catalog_product_link")
+        res = _create_product("p-plfmt-2", {"pl_fmt_2": _value({"type": "category", "id": "some_code"})})
+        assert res.status_code == 422
+
+    def test_missing_type_field_returns_422(self):
+        _create_attribute("pl_fmt_3", "pim_catalog_product_link")
+        res = _create_product("p-plfmt-3", {"pl_fmt_3": _value({"id": "fc24e6c3-933c-4a93-8a81-e5c703d134d5"})})
+        assert res.status_code == 422
+
+    def test_product_link_missing_id_and_identifier_returns_422(self):
+        _create_attribute("pl_fmt_4", "pim_catalog_product_link")
+        res = _create_product("p-plfmt-4", {"pl_fmt_4": _value({"type": "product"})})
+        assert res.status_code == 422
+
+    def test_product_model_link_missing_id_returns_422(self):
+        _create_attribute("pl_fmt_5", "pim_catalog_product_link")
+        res = _create_product("p-plfmt-5", {"pl_fmt_5": _value({"type": "product_model"})})
+        assert res.status_code == 422
+
+    def test_valid_product_link_with_uuid_succeeds(self):
+        _create_attribute("pl_fmt_6", "pim_catalog_product_link")
+        res = _create_product(
+            "p-plfmt-6",
+            {"pl_fmt_6": _value({"type": "product", "id": "fc24e6c3-933c-4a93-8a81-e5c703d134d5"})},
+        )
+        assert res.status_code == 201
+
+    def test_valid_product_link_with_identifier_succeeds(self):
+        _create_attribute("pl_fmt_7", "pim_catalog_product_link")
+        res = _create_product(
+            "p-plfmt-7",
+            {"pl_fmt_7": _value({"type": "product", "identifier": "bl1850b"})},
+        )
+        assert res.status_code == 201
+
+    def test_valid_product_model_link_succeeds(self):
+        _create_attribute("pl_fmt_8", "pim_catalog_product_link")
+        res = _create_product(
+            "p-plfmt-8",
+            {"pl_fmt_8": _value({"type": "product_model", "id": "my_super_battery"})},
+        )
+        assert res.status_code == 201
+
+    def test_patch_non_object_product_link_returns_422(self):
+        _create_attribute("pl_fmt_9", "pim_catalog_product_link")
+        client.post("/api/rest/v1/products", json={"identifier": "p-plfmt-patch"})
+        res = _patch_product("p-plfmt-patch", {"pl_fmt_9": _value(["product", "uuid"])})
+        assert res.status_code == 422
