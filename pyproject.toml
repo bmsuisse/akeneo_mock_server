@@ -1,6 +1,6 @@
 [project]
 name = "akeneo_mock_server"
-version = "0.6.0"
+version = "0.6.3"
 description = "This implements an API that's compatible to Akeneo. If it's not, it's a bug. This is NOT an official Akeneo Product"
 readme = "README.md"
 requires-python = ">=3.12"

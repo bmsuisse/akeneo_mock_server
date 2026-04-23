@@ -357,11 +357,37 @@ def _validate_product_values(db: psycopg.Connection, values: dict[str, Any]) -> 
 def _validate_product_values_if_applicable(
     db: psycopg.Connection, entity_name: str, data: dict[str, Any]
 ) -> None:
+    if entity_name == "families":
+        _validate_family(db, data)
+        return
     if entity_name not in _ENTITIES_WITH_VALUES:
         return
     values = data.get("values")
     if values and isinstance(values, dict):
         _validate_product_values(db, values)
+
+
+def _validate_family(db: psycopg.Connection, data: dict[str, Any]) -> None:
+    attributes = data.get("attributes")
+    if attributes is not None:
+        if not isinstance(attributes, list):
+            raise HTTPException(status_code=422, detail="attributes must be a list")
+        for attr_code in attributes:
+            row = db.execute("SELECT 1 FROM attributes WHERE id = %s", (attr_code,)).fetchone()
+            if row is None:
+                raise HTTPException(status_code=422, detail=f"Attribute '{attr_code}' does not exist.")
+
+    attribute_as_label = data.get("attribute_as_label")
+    if attribute_as_label:
+        row = db.execute("SELECT 1 FROM attributes WHERE id = %s", (attribute_as_label,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=422, detail=f"Attribute '{attribute_as_label}' does not exist.")
+
+    attribute_as_image = data.get("attribute_as_image")
+    if attribute_as_image:
+        row = db.execute("SELECT 1 FROM attributes WHERE id = %s", (attribute_as_image,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=422, detail=f"Attribute '{attribute_as_image}' does not exist.")
 
 
 _ATTRIBUTE_OPTION_ALLOWED_TYPES: frozenset[str] = frozenset({
@@ -921,16 +947,22 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                 background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "updated"), existing_data)
             else:
                 row = db.execute(f"SELECT * FROM {table} WHERE id = %s", (code,)).fetchone()
-                if row is None:
-                    _upsert_item(db, table, pk_field, code, data)
-                    responses.append({"line": index + 1, pk_field: code, "status_code": 201})
-                    background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "created"), data)
-                else:
-                    existing_data = _get_item_data_dict(row)
-                    existing_data.update(data)
-                    _upsert_item(db, table, pk_field, code, existing_data)
-                    responses.append({"line": index + 1, pk_field: code, "status_code": 204})
-                    background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "updated"), existing_data)
+                try:
+                    if row is None:
+                        _validate_product_values_if_applicable(db, entity_name, data)
+                        _upsert_item(db, table, pk_field, code, data)
+                        responses.append({"line": index + 1, pk_field: code, "status_code": 201})
+                        background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "created"), data)
+                    else:
+                        existing_data = _get_item_data_dict(row)
+                        existing_data.update(data)
+                        _validate_product_values_if_applicable(db, entity_name, existing_data)
+                        _upsert_item(db, table, pk_field, code, existing_data)
+                        responses.append({"line": index + 1, pk_field: code, "status_code": 204})
+                        background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "updated"), existing_data)
+                except HTTPException as e:
+                    responses.append({"line": index + 1, pk_field: code, "status_code": e.status_code, "message": str(e.detail)})
+                    continue
         db.commit()
         media_type = "application/json" if "application/json" in content_type else "application/vnd.akeneo.collection+json"
         content = json.dumps(responses) if media_type == "application/json" else "\n".join(json.dumps(r) for r in responses) + "\n"

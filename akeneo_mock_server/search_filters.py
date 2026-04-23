@@ -65,11 +65,14 @@ def _sql_clause_for_rule(table_name: str, field: str, rule: dict[str, Any]) -> E
     op = operator.upper()
 
     tables_with_data = {"asset_families", "deprecated_assets", "deprecated_asset_categories", "deprecated_asset_tags", "subscribers", "family_variants", "reference_entity_records", "reference_entity_attributes", "assets", "asset_attributes", "subscriptions"}
-    
+
     column = exp.column(field, table=table_name)
     if table_name in tables_with_data:
         # PostgreSQL JSONB extraction: data->>'field'
         column = exp.JSONExtractScalar(this=exp.column("data", table=table_name), expression=exp.Literal.string(field))
+    elif field in {"code", "identifier"}:
+        # Non-data tables store code/identifier in the 'id' column (not a separate 'code'/'identifier' column)
+        column = exp.column("id", table=table_name)
 
     if op in {"=", "!="}:
         if not _is_scalar_json_value(expected):
@@ -86,13 +89,13 @@ def _sql_clause_for_rule(table_name: str, field: str, rule: dict[str, Any]) -> E
             or not all(_is_scalar_json_value(value) for value in expected)
         ):
             return None
-        list_expr = exp.Tuple(expressions=[
+        list_exprs = [
             exp.Literal.string(str(v)) if isinstance(v, str) else exp.Literal.number(str(v))
             for v in expected
-        ])
+        ]
         if op == "IN":
-            return exp.In(this=column, expressions=[list_expr])
-        return exp.Not(this=exp.In(this=column, expressions=[list_expr]))
+            return exp.In(this=column, expressions=list_exprs)
+        return exp.Not(this=exp.In(this=column, expressions=list_exprs))
 
     if op in {"CONTAINS", "STARTS WITH", "ENDS WITH"}:
         if not isinstance(expected, str):
