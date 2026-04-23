@@ -14,7 +14,7 @@ ENTITY_TEST_DATA = {
     'categories': {'position': 99},
     'attributes': {'type': 'pim_catalog_text'},
     'attribute-groups': {'sort_order': 99},
-    'families': {'attribute_as_label': 'my_label'},
+    'families': {'labels': {'en_US': 'My Family'}},
     'channels': {'category_tree': 'master'},
     'locales': {'enabled': True},
     'currencies': {'enabled': True},
