@@ -1,0 +1,12 @@
+{
+  "name": "py-pglite-env",
+  "version": "0.5.3",
+  "description": "PGlite test environment for py-pglite",
+  "scripts": {
+    "start": "node pglite_manager.js"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.0",
+    "@electric-sql/pglite-socket": "^0.0.8"
+  }
+}

@@ -24,6 +24,12 @@ jobs:
         uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install PGlite npm dependencies
+        run: npm ci --prefix py-pglite-work
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Install project dependencies
@@ -31,4 +37,4 @@ jobs:
       - name: Pyright
         run: uv run pyright akeneo_mock_server
       - name: Test with pytest
-        run: uv run -m pytest  --capture=tee-sys --maxfail=3 tests
+        run: uv run -m pytest --capture=tee-sys --maxfail=3 tests

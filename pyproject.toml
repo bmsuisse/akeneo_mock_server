@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.28.1",
     "persist-queue[extra]>=1.1.0",
     "psycopg[binary,pool]>=3.3.3",
+    "py-pglite>=0.5.3",
     "pydantic>=2.12.5",
     "sqlglot>=26.11.2",
 ]
@@ -20,7 +21,6 @@ run = [
 [dependency-groups]
 test = [
     "pytest>=9.0.2",
-    "docker>=7.1.0",
 ]
 dev = [
     "uvicorn>=0.41.0",
