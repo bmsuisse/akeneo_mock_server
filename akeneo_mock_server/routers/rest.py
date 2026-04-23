@@ -118,15 +118,20 @@ def _validate_attribute_value(
 ) -> None:
     """Raise HTTPException 422 if data violates the attribute's validation rules."""
     if attr_type in ("pim_catalog_text", "pim_catalog_textarea", "pim_catalog_identifier"):
+        if not isinstance(data, str):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': expected a string.",
+            )
         max_chars = attr.get("max_characters")
-        if max_chars is not None and isinstance(data, str) and len(data) > max_chars:
+        if max_chars is not None and len(data) > max_chars:
             raise HTTPException(
                 status_code=422,
                 detail=f"Attribute '{attr_code}': value exceeds max_characters ({max_chars}).",
             )
         if attr.get("validation_rule") == "regexp":
             pattern = attr.get("validation_regexp")
-            if pattern and isinstance(data, str):
+            if pattern:
                 try:
                     if not re.fullmatch(pattern, data):
                         raise HTTPException(
@@ -135,6 +140,13 @@ def _validate_attribute_value(
                         )
                 except re.error:
                     pass
+
+    elif attr_type in ("pim_catalog_file", "pim_catalog_image"):
+        if not isinstance(data, str):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': expected a string.",
+            )
 
     elif attr_type == "pim_catalog_number":
         try:
@@ -179,11 +191,14 @@ def _validate_attribute_value(
             )
 
     elif attr_type == "pim_catalog_date":
+        if not isinstance(data, str):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': expected a string in ISO-8601 format.",
+            )
         date_min = attr.get("date_min")
         date_max = attr.get("date_max")
         if not date_min and not date_max:
-            return
-        if not isinstance(data, str):
             return
         try:
             date_val = datetime.fromisoformat(data.replace("Z", "+00:00"))
@@ -211,6 +226,113 @@ def _validate_attribute_value(
                     )
         except (ValueError, TypeError):
             pass
+
+    elif attr_type in (
+        "pim_catalog_simpleselect",
+        "pim_catalog_reference_data_simpleselect",
+        "akeneo_reference_entity",
+    ):
+        if not isinstance(data, str):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': expected a string.",
+            )
+
+    elif attr_type in (
+        "pim_catalog_multiselect",
+        "pim_catalog_reference_data_multiselect",
+        "akeneo_reference_entity_collection",
+        "pim_catalog_asset_collection",
+        "pim_assets_collection",
+    ):
+        if not isinstance(data, list) or not all(isinstance(item, str) for item in data):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': expected an array of strings.",
+            )
+
+    elif attr_type == "pim_catalog_metric":
+        if not isinstance(data, dict):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': expected an object with 'amount' and 'unit'.",
+            )
+        if "amount" not in data or "unit" not in data:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': metric must have 'amount' and 'unit'.",
+            )
+        if not isinstance(data["unit"], str):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': 'unit' must be a string.",
+            )
+
+    elif attr_type == "pim_catalog_price":
+        if not isinstance(data, list):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': expected an array of price objects.",
+            )
+        for price in data:
+            if not isinstance(price, dict):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Attribute '{attr_code}': each price must be an object.",
+                )
+            if "amount" not in price or "currency" not in price:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Attribute '{attr_code}': each price must have 'amount' and 'currency'.",
+                )
+            if not isinstance(price["currency"], str):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Attribute '{attr_code}': 'currency' must be a string.",
+                )
+
+    elif attr_type == "pim_catalog_boolean":
+        if not isinstance(data, bool):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': expected a boolean (true or false).",
+            )
+
+    elif attr_type == "pim_catalog_table":
+        if not isinstance(data, list):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': expected an array of row objects.",
+            )
+        for row in data:
+            if not isinstance(row, dict):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Attribute '{attr_code}': each row in a table must be an object.",
+                )
+
+    elif attr_type == "pim_catalog_product_link":
+        if not isinstance(data, dict):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': expected an object with 'type' and 'id' or 'identifier'.",
+            )
+        link_type = data.get("type")
+        if link_type not in ("product", "product_model"):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': 'type' must be 'product' or 'product_model'.",
+            )
+        if link_type == "product" and "id" not in data and "identifier" not in data:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': product link must have 'id' or 'identifier'.",
+            )
+        if link_type == "product_model" and "id" not in data:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': product_model link must have 'id'.",
+            )
 
 
 def _validate_product_values(db: psycopg.Connection, values: dict[str, Any]) -> None:
