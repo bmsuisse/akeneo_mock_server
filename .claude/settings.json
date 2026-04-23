@@ -2,7 +2,8 @@
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true
-  },"permissions": {
+  },
+  "permissions": {
     "allow": [
       "Bash(uv run pytest *)",
       "Bash(uv run pyright *)",
@@ -18,7 +19,26 @@
     ]
   },
   "filesystem": {
-      "allowRead": ["~/projects","/root/.cache/uv"
-      ]
+    "allowRead": [
+      "~/projects",
+      "/root/.cache/uv"
+    ]
+  },
+  "extraKnownMarketplaces": {
+    "bmsuisse-skills": {
+      "source": {
+        "source": "github",
+        "repo": "bmsuisse/skills",
+        "ref": "main",
+        "sparsePaths": [
+          "skills",
+          "hooks",
+          ".claude-plugin"
+        ]
+      }
+    }
+  },
+  "enabledPlugins": {
+    "skills@bmsuisse-skills": true
   }
 }
