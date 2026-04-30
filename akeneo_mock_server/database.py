@@ -231,8 +231,14 @@ class AttributeOptionModel(BaseModel):
     sort_order: int | None = None
     labels: dict[str, Any] | None = Field(default_factory=dict)
 
+class VariantAttributeSet(BaseModel):
+    level: int
+    axes: list[str] = Field(default_factory=list)
+    attributes: list[str] = Field(default_factory=list)
+
 class FamilyVariantModel(SubEntityBase):
-    pass
+    labels: dict[str, Any] | None = Field(default_factory=dict)
+    variant_attribute_sets: list[VariantAttributeSet] | None = Field(default_factory=list)
 
 class ReferenceEntityRecordModel(SubEntityBase):
     pass
