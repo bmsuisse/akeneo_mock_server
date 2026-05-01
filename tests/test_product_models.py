@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+
 from akeneo_mock_server.app import app
 
 client = TestClient(app)
@@ -64,9 +65,7 @@ class TestProductModels:
             "family": "pm-fam-4",
             "family_variant": "pm-fam-4-v",
             "categories": ["master"],
-            "values": {
-                "name": [{"locale": "en_US", "scope": None, "data": "My Model"}]
-            },
+            "values": {"name": [{"locale": "en_US", "scope": None, "data": "My Model"}]},
         }
         client.post("/api/rest/v1/product-models", json=payload)
 
@@ -143,7 +142,9 @@ class TestProductModels:
 
 
 class TestProductModelSearch:
-    def _create(self, code: str, family: str, variant: str, values: dict | None = None, categories: list | None = None):
+    def _create(
+        self, code: str, family: str, variant: str, values: dict | None = None, categories: list | None = None
+    ):
         payload: dict = {"code": code, "family": family, "family_variant": variant}
         if values:
             payload["values"] = values
@@ -154,11 +155,15 @@ class TestProductModelSearch:
     def test_search_by_attribute_value_contains(self):
         _setup_family_variant("pm-sf-1", "pm-sf-1-v", ["color"])
         self._create(
-            "pm-search-a", "pm-sf-1", "pm-sf-1-v",
+            "pm-search-a",
+            "pm-sf-1",
+            "pm-sf-1-v",
             values={"name": [{"locale": "en_US", "scope": None, "data": "Alpha Model"}]},
         )
         self._create(
-            "pm-search-b", "pm-sf-1", "pm-sf-1-v",
+            "pm-search-b",
+            "pm-sf-1",
+            "pm-sf-1-v",
             values={"name": [{"locale": "en_US", "scope": None, "data": "Beta Model"}]},
         )
 
@@ -173,6 +178,19 @@ class TestProductModelSearch:
         codes = {item["code"] for item in res.json()["_embedded"]["items"]}
         assert "pm-search-a" in codes
         assert "pm-search-b" not in codes
+
+        res2 = client.get(
+            "/api/rest/v1/product-models",
+            params={
+                "search": '{"code":[{"operator":"IN","value":"["pm-search-a", "pm-search-b"]"}]}',
+                "search_locale": "en_US",
+            },
+        )
+        assert res2.status_code == 200
+        codes2 = {item["code"] for item in res2.json()["_embedded"]["items"]}
+        assert "pm-search-a" in codes2
+        assert "pm-search-b" in codes2
+        assert len(codes2) == 2
 
     def test_search_by_categories(self):
         _setup_family_variant("pm-sf-2", "pm-sf-2-v", ["color"])
