@@ -188,7 +188,7 @@ class TestProductModelSearch:
                 "search_locale": "en_US",
             },
         )
-        if not res2.ok:
+        if res2.status_code >= 300:
             print(f"Response status: {res2.status_code}")
             print(f"Response body: {res2.text}")
         assert res2.status_code == 200
