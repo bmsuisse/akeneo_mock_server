@@ -86,3 +86,8 @@ To guarantee strict compliance, the API uses a custom `StarletteOpenAPIMiddlewar
 
 ### Bypassing Native Middleware
 During Pytest execution, the TestClient uses the `testclient` User-Agent. Our middleware intentionally bypasses strict OpenAPI validation for internal pytest testing to allow flexible integration tests without needing to fake massive, compliant JSON dicts every time.
+
+## Development
+
+Use uv.
+To install skills for AI Agents, run `uv run skillup sync`
