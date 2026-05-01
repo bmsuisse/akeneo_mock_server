@@ -16,8 +16,6 @@ def main():
     if not branch:
         return
 
-    print(f"Current branch: {branch}")
-
     # 2. Check for PR to main
     pr_json = run_command(f"gh pr list --head {branch} --base main --json number")
     if not pr_json:
@@ -25,32 +23,40 @@ def main():
     
     prs = json.loads(pr_json)
     if not prs:
-        print(f"No open PR found from {branch} to main.")
-        return
-    
-    pr_number = prs[0]['number']
-    print(f"Found PR #{pr_number}")
+        # If no PR to main, maybe just check runs for this branch
+        pass
+    else:
+        pr_number = prs[0]['number']
+        # print(f"Found PR #{pr_number}")
 
-    # 3. Get failed runs for this branch
-    runs_json = run_command(f"gh run list --branch {branch} --status failure --json databaseId,createdAt")
+    # 3. Get the latest run for this branch
+    runs_json = run_command(f"gh run list --branch {branch} --limit 1 --json databaseId,status,conclusion,createdAt")
     if not runs_json:
         return
     
     runs = json.loads(runs_json)
     if not runs:
-        print(f"No failed runs found for branch {branch}.")
+        print(f"No runs found for branch {branch}.")
         return
     
-    # Sort by createdAt to find the "first" failed run
-    runs.sort(key=lambda x: x['createdAt'])
-    first_failed_run = runs[0]
+    latest_run = runs[0]
+    run_id = latest_run['databaseId']
+    status = latest_run['status']
+    conclusion = latest_run['conclusion']
     
-    run_id = first_failed_run['databaseId']
-    created_at = first_failed_run['createdAt']
+    if status != "completed":
+        print(f"Latest run is {status} (not completed yet).")
+        return
+
+    if conclusion == "success":
+        print("SUCCESS")
+        return
+
+    if conclusion != "failure":
+        print(f"Latest run completed with conclusion: {conclusion}")
+        return
     
-    print(f"First failed run ID: {run_id} (Created at: {created_at})")
-    print("-" * 40)
-    
+    # If it failed, we continue to extract logs
     # 4. Output the logs
     logs = run_command(f"gh run view {run_id} --log")
     if not logs:
