@@ -42,18 +42,10 @@ Hello, fellow AI Agent! If you are reading this, you are working in the `MockAke
 - Schemathesis strictly expects `Content-Type: application/json` on all `201 Created` responses. Never return `Response(status_code=201)`. Use `JSONResponse(content={}, status_code=201)`.
 - HTTP 204 No Content MUST NOT HAVE A BODY. Return `Response(status_code=204)`. Do not use `JSONResponse`.
 
-## Safe Commit Workflow
+## Commit
 
-When wrapping up a feature, execute the following to verify the repository:
-```bash
-uv run ruff format .
-uv run pyright main.py database.py tests/test_api.py
-uv run pytest tests/test_api.py -v
-git add .
-git commit -m "style: describe your changes"
-git push origin <branch_name>
-```
+Commit, and fix the pre-commit errors if required
 
-Always create a new branch for each feature request. Do not push directly to main unless specifically authorized. 
+## Test on CI/CD
 
-Happy coding!
+Use `uv run get_pr_build.py --wait` to see status of CI/CD. Fix, commit, push, recheck until ok.

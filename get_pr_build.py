@@ -1,17 +1,26 @@
 import subprocess
 import json
+import argparse
+import re
 
 
-def run_command(command):
-    result = subprocess.run(command, capture_output=True, text=True, shell=True)
-    if result.returncode != 0:
-        print(f"Error running command: {command}")
-        print(result.stderr)
-        return None
-    return result.stdout.strip()
+def run_command(command, capture_output=True):
+    if capture_output:
+        result = subprocess.run(command, capture_output=True, text=True, shell=True)
+        if result.returncode != 0:
+            print(f"Error running command: {command}")
+            print(result.stderr)
+            return None
+        return result.stdout.strip()
+    else:
+        return subprocess.call(command, shell=True)
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Get latest PR build logs")
+    parser.add_argument("--wait", action="store_true", help="Wait for the run to complete if it is pending")
+    args = parser.parse_args()
+
     # 1. Get current branch
     branch = run_command("git rev-parse --abbrev-ref HEAD")
     if not branch:
@@ -19,7 +28,7 @@ def main():
 
     # 2. Check for PR to main
     pr_json = run_command(f"gh pr list --head {branch} --base main --json number")
-    if not pr_json:
+    if pr_json is None:
         return
 
     prs = json.loads(pr_json)
@@ -42,11 +51,23 @@ def main():
     latest_run = runs[0]
     run_id = latest_run["databaseId"]
     status = latest_run["status"]
-    conclusion = latest_run["conclusion"]
 
     if status != "completed":
-        print(f"Latest run is {status} (not completed yet).")
-        return
+        if args.wait:
+            print(f"Latest run is {status}. Waiting for it to complete...")
+            run_command(f"gh run watch {run_id}", capture_output=False)
+            # Re-fetch the run status for the specific run_id
+            run_info_json = run_command(f"gh run view {run_id} --json status,conclusion")
+            if not run_info_json:
+                return
+            run_info = json.loads(run_info_json)
+            status = run_info["status"]
+            conclusion = run_info["conclusion"]
+        else:
+            print(f"Latest run is {status} (not completed yet). Use --wait to wait for it.")
+            return
+    else:
+        conclusion = latest_run["conclusion"]
 
     if conclusion == "success":
         print("SUCCESS")
@@ -64,8 +85,6 @@ def main():
         return
 
     # 5. Filter for pytest output
-    import re
-
     lines = logs.splitlines()
     pytest_lines = []
     found_pytest = False

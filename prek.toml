@@ -27,3 +27,9 @@ repo = "local"
 hooks = [
     { id = "prettier", name = "prettier", language = "system", entry = "bunx --bun prettier --write", files = '\\.(ts|tsx|js|jsx|vue)$' },
 ]
+
+[[repos]]
+repo = "local"
+hooks = [
+    { id = "pyright", name = "pyright", language = "system", entry = "uv run pyright", files = '\\.py$' },
+]
