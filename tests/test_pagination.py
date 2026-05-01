@@ -167,3 +167,46 @@ def test_three_level_attribute_option_lists_are_not_paginated() -> None:
     assert isinstance(asset_body, list)
     assert "_embedded" not in asset_body
     assert "_links" not in asset_body
+
+
+def test_search_after_on_product_models() -> None:
+    # Setup family and variant
+    client.post("/api/rest/v1/families", json={"code": "pm-fam-pag"})
+    client.post(
+        "/api/rest/v1/families/pm-fam-pag/variants",
+        json={
+            "code": "pm-fam-pag-v",
+            "variant_attribute_sets": [{"level": 1, "axes": ["color"], "attributes": ["color"]}],
+        },
+    )
+
+    # Create 3 product models
+    for i in range(1, 4):
+        code = f"pm-pag-{i}"
+        client.post(
+            "/api/rest/v1/product-models",
+            json={"code": code, "family": "pm-fam-pag", "family_variant": "pm-fam-pag-v"},
+        )
+
+    # Get first page with limit 2
+    first_page = client.get(
+        "/api/rest/v1/product-models",
+        params={"pagination_type": "search_after", "limit": 2},
+    )
+    assert first_page.status_code == 200
+    first_body = first_page.json()
+
+    first_items = first_body["_embedded"]["items"]
+    assert len(first_items) == 2
+    assert "next" in first_body["_links"]
+    assert "current_page" not in first_body
+
+    # Get second page
+    next_href = first_body["_links"]["next"]["href"]
+    second_page = client.get(next_href)
+    assert second_page.status_code == 200
+    second_body = second_page.json()
+    second_items = second_body["_embedded"]["items"]
+    assert len(second_items) == 1
+    assert second_items[0]["code"] == "pm-pag-3"
+    assert "next" not in second_body["_links"]

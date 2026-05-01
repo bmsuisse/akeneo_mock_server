@@ -1,0 +1,14 @@
+{
+  "repos": {
+    "bmsuisse/skills": {
+      "skills": [
+        "fastapi-guideline",
+        "prek"
+      ],
+      "source": "release",
+      "ref": "v0.97.0",
+      "commit": "670c38469c775ec8dc1c7a7ec7139a24d03585e4",
+      "tag": "v0.97.0"
+    }
+  }
+}

@@ -12,6 +12,7 @@ SCHEMA_SQL_PATH = Path(__file__).with_name("schema.sql")
 _db_pool: ConnectionPool | None = None
 _db_pool_url: str | None = None
 
+
 def get_db_url():
     return os.environ.get("AKENEO_DATABASE_URL", "postgresql://akeneo:akeneo@localhost:54327/akeneo")
 
@@ -47,15 +48,18 @@ def close_db_pool() -> None:
     _db_pool = None
     _db_pool_url = None
 
+
 def get_connection():
     conn = psycopg.connect(get_db_url(), row_factory=dict_row)
     return conn
+
 
 class EntityBase(BaseModel):
     id: str | None = None
     code: str | None = None
     data: str | None = "{}"
     updated: Any | None = None
+
 
 class SubEntityBase(BaseModel):
     id: str | None = None
@@ -64,7 +68,9 @@ class SubEntityBase(BaseModel):
     data: str | None = "{}"
     updated: Any | None = None
 
+
 # Explicit Models (now Pydantic models for validation/typing, not ORM)
+
 
 class ProductModel(BaseModel):
     uuid: str | None = None
@@ -83,9 +89,11 @@ class ProductModel(BaseModel):
     quality_scores: Any | None = None
     completenesses: Any | None = None
 
+
 class ProductUuidModel(BaseModel):
     uuid: str
     identifier: str | None = None
+
 
 class PublishedProductModel(BaseModel):
     identifier: str
@@ -99,6 +107,7 @@ class PublishedProductModel(BaseModel):
     created: str | None = None
     updated: str | None = None
 
+
 class CategoryModel(BaseModel):
     code: str
     parent: str | None = None
@@ -107,6 +116,7 @@ class CategoryModel(BaseModel):
     labels: dict[str, Any] | None = Field(default_factory=dict)
     values: dict[str, Any] | None = Field(default_factory=dict)
     channel_requirements: list[str] | None = Field(default_factory=list)
+
 
 class AttributeModel(BaseModel):
     code: str
@@ -142,11 +152,13 @@ class AttributeModel(BaseModel):
     decimal_places_strategy: str | None = None
     decimal_places: float | None = None
 
+
 class AttributeGroupModel(BaseModel):
     code: str
     sort_order: int | None = 0
     attributes: list[str] | None = Field(default_factory=list)
     labels: dict[str, Any] | None = Field(default_factory=dict)
+
 
 class FamilyModel(BaseModel):
     code: str
@@ -156,6 +168,7 @@ class FamilyModel(BaseModel):
     attribute_requirements: dict[str, Any] | None = Field(default_factory=dict)
     labels: dict[str, Any] | None = Field(default_factory=dict)
 
+
 class ChannelModel(BaseModel):
     code: str
     locales: list[str] = Field(default_factory=list)
@@ -164,19 +177,23 @@ class ChannelModel(BaseModel):
     conversion_units: dict[str, Any] | None = Field(default_factory=dict)
     labels: dict[str, Any] | None = Field(default_factory=dict)
 
+
 class LocaleModel(BaseModel):
     code: str
     enabled: bool | None = False
+
 
 class CurrencyModel(BaseModel):
     code: str
     enabled: bool | None = False
     label: str | None = None
 
+
 class MeasureFamilyModel(BaseModel):
     code: str
     standard: str | None = None
     units: list[dict[str, Any]] | None = Field(default_factory=list)
+
 
 class MeasurementFamilyModel(BaseModel):
     code: str
@@ -184,19 +201,23 @@ class MeasurementFamilyModel(BaseModel):
     standard_unit_code: str = ""
     units: dict[str, Any] = Field(default_factory=dict)
 
+
 class AssociationTypeModel(BaseModel):
     code: str
     labels: dict[str, Any] | None = Field(default_factory=dict)
     is_quantified: bool | None = False
     is_two_way: bool | None = False
 
+
 class ReferenceEntityModel(BaseModel):
     code: str
     labels: dict[str, Any] | None = Field(default_factory=dict)
     image: str | None = None
 
+
 class AssetFamilyModel(EntityBase):
     pass
+
 
 class ProductModelEntityModel(BaseModel):
     code: str
@@ -212,17 +233,22 @@ class ProductModelEntityModel(BaseModel):
     metadata_info: dict[str, Any] | None = Field(default=None, alias="metadata")
     quality_scores: Any | None = None
 
+
 class DeprecatedAssetModel(EntityBase):
     pass
+
 
 class DeprecatedAssetCategoryModel(EntityBase):
     pass
 
+
 class DeprecatedAssetTagModel(EntityBase):
     pass
 
+
 class SubscriberModel(EntityBase):
     pass
+
 
 class AttributeOptionModel(BaseModel):
     code: str
@@ -231,32 +257,40 @@ class AttributeOptionModel(BaseModel):
     sort_order: int | None = None
     labels: dict[str, Any] | None = Field(default_factory=dict)
 
+
 class VariantAttributeSet(BaseModel):
     level: int
     axes: list[str] = Field(default_factory=list)
     attributes: list[str] = Field(default_factory=list)
 
+
 class FamilyVariantModel(SubEntityBase):
     labels: dict[str, Any] | None = Field(default_factory=dict)
     variant_attribute_sets: list[VariantAttributeSet] | None = Field(default_factory=list)
 
+
 class ReferenceEntityRecordModel(SubEntityBase):
     pass
+
 
 class ReferenceEntityAttributeModel(SubEntityBase):
     pass
 
+
 class AssetModel(SubEntityBase):
     pass
 
+
 class AssetAttributeModel(SubEntityBase):
     pass
+
 
 class SubscriptionModel(BaseModel):
     pk: str = ""
     id: str
     parent_id: str
     data: str = "{}"
+
 
 MODELS: dict[str, dict[str, Any]] = {
     "products": {"model": ProductModel, "pk_field": "identifier", "table": "products"},
@@ -276,7 +310,11 @@ MODELS: dict[str, dict[str, Any]] = {
     "asset-families": {"model": AssetFamilyModel, "pk_field": "code", "table": "asset_families"},
     "product-models": {"model": ProductModelEntityModel, "pk_field": "code", "table": "product_models"},
     "assets": {"model": DeprecatedAssetModel, "pk_field": "code", "table": "deprecated_assets"},
-    "asset-categories": {"model": DeprecatedAssetCategoryModel, "pk_field": "code", "table": "deprecated_asset_categories"},
+    "asset-categories": {
+        "model": DeprecatedAssetCategoryModel,
+        "pk_field": "code",
+        "table": "deprecated_asset_categories",
+    },
     "asset-tags": {"model": DeprecatedAssetTagModel, "pk_field": "code", "table": "deprecated_asset_tags"},
 }
 
@@ -325,6 +363,7 @@ SUB_MODELS = {
     },
 }
 
+
 def init_db():
     retries = 10
     conn = None
@@ -349,27 +388,29 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 def get_db() -> Generator[psycopg.Connection, None, None]:
     with get_db_pool().connection() as conn:
         yield conn
+
 
 # Helper for Session-like behavior if needed, but we'll use raw connections.
 class SessionShim:
     def __init__(self, conn: psycopg.Connection):
         self.conn = conn
-    
+
     def exec(self, query: Any):
         # This will be updated to handle sqlglot queries
         pass
-    
+
     def add(self, item: Any):
         pass
-    
+
     def commit(self):
         self.conn.commit()
-    
+
     def rollback(self):
         self.conn.rollback()
-    
+
     def close(self):
         self.conn.close()

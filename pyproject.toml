@@ -1,6 +1,6 @@
 [project]
 name = "akeneo_mock_server"
-version = "0.6.4"
+version = "0.7.0"
 description = "This implements an API that's compatible to Akeneo. If it's not, it's a bug. This is NOT an official Akeneo Product"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -28,6 +28,7 @@ dev = [
     "ruff>=0.15.4",
     "schemathesis>=4.11.0",
     "pyright>=1.1.408",
+    "skillup>=0.3.2",
 ]
 
 [tool.pyright]
@@ -50,6 +51,16 @@ reportReturnType = "none"
 
 [tool.ruff]
 line-length = 119
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.format]
+indent-style = "space"
+quote-style = "double"
+line-ending = "auto"
+
+[tool.sqlfmt]
+line_length = 119
 
 [project.scripts]
 run_akeneo_mock = "akeneo_mock_server.__main__:main"

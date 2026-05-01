@@ -70,8 +70,8 @@ def _start_docker_container() -> tuple[object, str]:
 def postgres_container():
     # Use an already-running postgres if available (e.g. CI or local install)
     existing_url = os.environ.get("AKENEO_DATABASE_URL", _DEFAULT_DB_URL)
-    if not "connect_timeout" in existing_url:
-            existing_url += ("&" if "?" in existing_url else "?") + "connect_timeout=10"
+    if "connect_timeout" not in existing_url:
+        existing_url += ("&" if "?" in existing_url else "?") + "connect_timeout=10"
     if _try_connect(existing_url):
         os.environ["AKENEO_DATABASE_URL"] = existing_url
         yield None
@@ -97,6 +97,7 @@ def init_db_once(postgres_container):
 @pytest.fixture(autouse=True)
 def fresh_db(init_db_once):
     from akeneo_mock_server.database import get_db_url, MODELS, SUB_MODELS
+
     db_url = get_db_url()
     conn = psycopg.connect(db_url)
     try:

@@ -252,3 +252,5 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 CREATE INDEX IF NOT EXISTS idx_subscriptions_id ON subscriptions(id);
 
 CREATE INDEX IF NOT EXISTS idx_subscriptions_parent_id ON subscriptions(parent_id);
+
+TRUNCATE TABLE products, products_uuid, published_products, categories, attributes, attribute_groups, families, channels, locales, currencies, measure_families, measurement_families, association_types, reference_entities, asset_families, product_models, deprecated_assets, deprecated_asset_categories, deprecated_asset_tags, subscribers, attribute_options, family_variants, reference_entity_records, reference_entity_attributes, assets, asset_attributes, subscriptions;
