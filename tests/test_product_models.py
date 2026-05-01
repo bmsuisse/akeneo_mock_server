@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from akeneo_mock_server.app import app
@@ -182,10 +184,13 @@ class TestProductModelSearch:
         res2 = client.get(
             "/api/rest/v1/product-models",
             params={
-                "search": '{"code":[{"operator":"IN","value":"["pm-search-a", "pm-search-b"]"}]}',
+                "search": json.dumps({"code": [{"operator": "IN", "value": ["pm-search-a", "pm-search-b"]}]}),
                 "search_locale": "en_US",
             },
         )
+        if not res2.ok:
+            print(f"Response status: {res2.status_code}")
+            print(f"Response body: {res2.text}")
         assert res2.status_code == 200
         codes2 = {item["code"] for item in res2.json()["_embedded"]["items"]}
         assert "pm-search-a" in codes2
