@@ -3,6 +3,7 @@ from akeneo_mock_server.app import app
 
 client = TestClient(app)
 
+
 def _setup_family_variant(family_code: str, variant_code: str, axes: list[str]):
     client.post("/api/rest/v1/families", json={"code": family_code})
     client.post(
@@ -13,9 +14,10 @@ def _setup_family_variant(family_code: str, variant_code: str, axes: list[str]):
         },
     )
 
+
 def test_search_after_on_product_models() -> None:
     _setup_family_variant("pm-fam-pagination", "pm-fam-pagination-v", ["color"])
-    
+
     # Create 5 product models
     for i in range(1, 6):
         code = f"pm-pag-{i}"
@@ -31,7 +33,7 @@ def test_search_after_on_product_models() -> None:
     )
     assert first_page.status_code == 200
     first_body = first_page.json()
-    
+
     first_items = first_body["_embedded"]["items"]
     assert len(first_items) == 2
     assert "next" in first_body["_links"]
@@ -56,9 +58,10 @@ def test_search_after_on_product_models() -> None:
     assert "next" not in third_body["_links"]
     assert third_items[0]["code"] == "pm-pag-5"
 
+
 def test_search_after_with_filter_on_product_models() -> None:
     _setup_family_variant("pm-fam-search", "pm-fam-search-v", ["color"])
-    
+
     # Create 3 product models in this family
     for i in ["a", "b", "c"]:
         client.post(
@@ -77,7 +80,7 @@ def test_search_after_with_filter_on_product_models() -> None:
         "search": '{"family":[{"operator":"=","value":"pm-fam-search"}]}',
         "limit": 2,
     }
-    
+
     first_page = client.get("/api/rest/v1/product-models", params=params)
     assert first_page.status_code == 200
     first_body = first_page.json()

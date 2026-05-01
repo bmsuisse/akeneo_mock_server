@@ -51,6 +51,16 @@ reportReturnType = "none"
 
 [tool.ruff]
 line-length = 119
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.format]
+indent-style = "space"
+quote-style = "double"
+line-ending = "auto"
+
+[tool.sqlfmt]
+line_length = 119
 
 [project.scripts]
 run_akeneo_mock = "akeneo_mock_server.__main__:main"

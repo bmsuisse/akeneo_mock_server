@@ -57,6 +57,7 @@ def test_filter_families_by_code_equals():
 # Family variants — variant_attribute_sets persistence
 # ---------------------------------------------------------------------------
 
+
 def _create_family(code: str):
     client.post("/api/rest/v1/families", json={"code": code})
 
@@ -66,9 +67,7 @@ def test_create_family_variant_persists_variant_attribute_sets():
     payload = {
         "code": "fam-var-1-color",
         "labels": {"en_US": "By Color"},
-        "variant_attribute_sets": [
-            {"level": 1, "axes": ["color"], "attributes": ["color", "size"]}
-        ],
+        "variant_attribute_sets": [{"level": 1, "axes": ["color"], "attributes": ["color", "size"]}],
     }
     res = client.post("/api/rest/v1/families/fam-var-1/variants", json=payload)
     assert res.status_code == 201
@@ -77,9 +76,7 @@ def test_create_family_variant_persists_variant_attribute_sets():
     assert res.status_code == 200
     body = res.json()
     assert body["code"] == "fam-var-1-color"
-    assert body["variant_attribute_sets"] == [
-        {"level": 1, "axes": ["color"], "attributes": ["color", "size"]}
-    ]
+    assert body["variant_attribute_sets"] == [{"level": 1, "axes": ["color"], "attributes": ["color", "size"]}]
 
 
 def test_create_family_variant_persists_labels():
@@ -87,9 +84,7 @@ def test_create_family_variant_persists_labels():
     payload = {
         "code": "fam-var-2-size",
         "labels": {"en_US": "By Size", "fr_FR": "Par Taille"},
-        "variant_attribute_sets": [
-            {"level": 1, "axes": ["size"], "attributes": ["size"]}
-        ],
+        "variant_attribute_sets": [{"level": 1, "axes": ["size"], "attributes": ["size"]}],
     }
     client.post("/api/rest/v1/families/fam-var-2/variants", json=payload)
 
@@ -104,9 +99,7 @@ def test_list_family_variants_includes_variant_attribute_sets():
             "/api/rest/v1/families/fam-var-3/variants",
             json={
                 "code": f"fam-var-3-v{i}",
-                "variant_attribute_sets": [
-                    {"level": 1, "axes": [f"attr{i}"], "attributes": [f"attr{i}"]}
-                ],
+                "variant_attribute_sets": [{"level": 1, "axes": [f"attr{i}"], "attributes": [f"attr{i}"]}],
             },
         )
 

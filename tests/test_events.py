@@ -1,9 +1,6 @@
-import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
-from akeneo_mock_server import database
 from akeneo_mock_server.app import app
-from akeneo_mock_server.database import init_db
 
 client = TestClient(app)
 

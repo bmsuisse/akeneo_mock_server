@@ -143,7 +143,8 @@ schema = schemathesis.openapi.from_asgi(
 schema.raw_schema = schemathesis.openapi.from_path(SCHEMA_PATH).raw_schema
 
 
-from hypothesis import settings, HealthCheck
+from hypothesis import settings, HealthCheck  # noqa: E402
+
 
 @schema.parametrize()
 @settings(

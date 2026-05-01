@@ -8,22 +8,22 @@ from akeneo_mock_server.app import app
 from akeneo_mock_server.database import MODELS, SUB_MODELS, get_db
 
 ENTITY_TEST_DATA = {
-    'products': {'enabled': False},
-    'products-uuid': {'enabled': False},
-    'published-products': {'enabled': False},
-    'categories': {'position': 99},
-    'attributes': {'type': 'pim_catalog_text'},
-    'attribute-groups': {'sort_order': 99},
-    'families': {'labels': {'en_US': 'My Family'}},
-    'channels': {'category_tree': 'master'},
-    'locales': {'enabled': True},
-    'currencies': {'enabled': True},
-    'measure-families': {'standard': 'METER'},
-    'measurement-families': {'standard_unit_code': 'METER'},
-    'association-types': {'is_quantified': True},
-    'reference-entities': {'image': 'test.jpg'},
-    'asset-families': {},
-    'product-models': {'family_variant': 'shirt_variant'}
+    "products": {"enabled": False},
+    "products-uuid": {"enabled": False},
+    "published-products": {"enabled": False},
+    "categories": {"position": 99},
+    "attributes": {"type": "pim_catalog_text"},
+    "attribute-groups": {"sort_order": 99},
+    "families": {"labels": {"en_US": "My Family"}},
+    "channels": {"category_tree": "master"},
+    "locales": {"enabled": True},
+    "currencies": {"enabled": True},
+    "measure-families": {"standard": "METER"},
+    "measurement-families": {"standard_unit_code": "METER"},
+    "association-types": {"is_quantified": True},
+    "reference-entities": {"image": "test.jpg"},
+    "asset-families": {},
+    "product-models": {"family_variant": "shirt_variant"},
 }
 
 client = TestClient(app)
@@ -48,6 +48,7 @@ def test_psycopg_undefined_table_returns_500_with_details():
     assert payload["details"]["exception_type"] == "UndefinedTable"
     assert "does not exist" in payload["details"]["exception_message"]
 
+
 def test_root():
     response = client.get("/api/rest/v1")
     assert response.status_code == 200
@@ -56,10 +57,7 @@ def test_root():
 
 def test_ndjson_patch_products():
     """Verify that multiple products can be patched via NDJSON (non-standard Akeneo but common)."""
-    ndjson_data = (
-        '{"identifier": "p1", "enabled": true}\n'
-        '{"identifier": "p2", "enabled": false}\n'
-    )
+    ndjson_data = '{"identifier": "p1", "enabled": true}\n{"identifier": "p2", "enabled": false}\n'
     response = client.patch(
         "/api/rest/v1/products",
         content=ndjson_data,

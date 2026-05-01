@@ -179,7 +179,7 @@ def test_search_after_on_product_models() -> None:
             "variant_attribute_sets": [{"level": 1, "axes": ["color"], "attributes": ["color"]}],
         },
     )
-    
+
     # Create 3 product models
     for i in range(1, 4):
         code = f"pm-pag-{i}"
@@ -195,7 +195,7 @@ def test_search_after_on_product_models() -> None:
     )
     assert first_page.status_code == 200
     first_body = first_page.json()
-    
+
     first_items = first_body["_embedded"]["items"]
     assert len(first_items) == 2
     assert "next" in first_body["_links"]

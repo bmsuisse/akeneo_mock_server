@@ -75,10 +75,11 @@ def get_subscriptions(subscriber_id: str, db: psycopg.Connection = Depends(get_d
 
 
 @router.get("/subscribers/{subscriber_id}/subscriptions/{subscription_id}")
-def get_subscription(subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)) -> dict[str, Any]:
+def get_subscription(
+    subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)
+) -> dict[str, Any]:
     row = db.execute(
-        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s",
-        (subscriber_id, subscription_id)
+        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Subscription not found")
@@ -89,22 +90,23 @@ def get_subscription(subscriber_id: str, subscription_id: str, db: psycopg.Conne
     "/subscribers/{subscriber_id}/subscriptions",
     status_code=status.HTTP_201_CREATED,
 )
-async def create_subscription(subscriber_id: str, request: Request, db: psycopg.Connection = Depends(get_db)) -> JSONResponse:
+async def create_subscription(
+    subscriber_id: str, request: Request, db: psycopg.Connection = Depends(get_db)
+) -> JSONResponse:
     data = await safe_json_body(request)
     subscription_id = data.get("id")
     if not isinstance(subscription_id, str) or not subscription_id:
         raise HTTPException(status_code=422, detail="Missing 'id' field in payload")
 
     existing = db.execute(
-        "SELECT 1 FROM subscriptions WHERE parent_id = %s AND id = %s",
-        (subscriber_id, subscription_id)
+        "SELECT 1 FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
     ).fetchone()
     if existing is not None:
         raise HTTPException(status_code=409, detail="Subscription already exists")
 
     db.execute(
         "INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s)",
-        (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, Jsonb(data))
+        (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, Jsonb(data)),
     )
     db.commit()
 
@@ -127,21 +129,19 @@ async def patch_subscription(
 ) -> Response:
     data = await safe_json_body(request)
     row = db.execute(
-        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s",
-        (subscriber_id, subscription_id)
+        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
     ).fetchone()
     if row is None:
         data["id"] = subscription_id
         db.execute(
             "INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s)",
-            (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, Jsonb(data))
+            (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, Jsonb(data)),
         )
     else:
         existing = safe_loads(row["data"])
         existing.update(data)
         db.execute(
-            "UPDATE subscriptions SET data = %s WHERE pk = %s",
-            (Jsonb(existing), f"{subscriber_id}/{subscription_id}")
+            "UPDATE subscriptions SET data = %s WHERE pk = %s", (Jsonb(existing), f"{subscriber_id}/{subscription_id}")
         )
 
     db.commit()
@@ -152,10 +152,11 @@ async def patch_subscription(
     "/subscribers/{subscriber_id}/subscriptions/{subscription_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_subscription(subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)) -> Response:
+def delete_subscription(
+    subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)
+) -> Response:
     row = db.execute(
-        "SELECT 1 FROM subscriptions WHERE parent_id = %s AND id = %s",
-        (subscriber_id, subscription_id)
+        "SELECT 1 FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Subscription not found")

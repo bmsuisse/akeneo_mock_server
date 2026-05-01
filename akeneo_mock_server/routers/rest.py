@@ -80,7 +80,9 @@ def search_products_uuid(
     }
 
 
-def _validate_payload(payload: dict[str, Any], model_class: Any | None = None, partial: bool = False) -> dict[str, Any]:
+def _validate_payload(
+    payload: dict[str, Any], model_class: Any | None = None, partial: bool = False
+) -> dict[str, Any]:
     if model_class is not None:
         if partial:
             return payload
@@ -88,6 +90,7 @@ def _validate_payload(payload: dict[str, Any], model_class: Any | None = None, p
             return model_class.model_validate(payload).model_dump(mode="python", exclude_unset=True)
         except ValidationError as e:
             import logging
+
             logging.error(f"DEBUG: Validation error for model {model_class.__name__}: {e.errors()}")
             raise HTTPException(status_code=422, detail=e.errors())
         except Exception as e:
@@ -105,17 +108,17 @@ def _validate_complete_payload(payload: dict[str, Any], model_class: Any) -> dic
         raise HTTPException(status_code=422, detail=e.errors())
 
 
-_ENTITIES_WITH_VALUES: frozenset[str] = frozenset({
-    "products",
-    "products-uuid",
-    "product-models",
-    "published-products",
-})
+_ENTITIES_WITH_VALUES: frozenset[str] = frozenset(
+    {
+        "products",
+        "products-uuid",
+        "product-models",
+        "published-products",
+    }
+)
 
 
-def _validate_attribute_value(
-    attr_code: str, attr_type: str, attr: dict[str, Any], data: Any
-) -> None:
+def _validate_attribute_value(attr_code: str, attr_type: str, attr: dict[str, Any], data: Any) -> None:
     """Raise HTTPException 422 if data violates the attribute's validation rules."""
     if attr_type in ("pim_catalog_text", "pim_catalog_textarea", "pim_catalog_identifier"):
         if not isinstance(data, str):
@@ -381,9 +384,7 @@ def _validate_product_family_attributes(db: psycopg.Connection, data: dict[str, 
             )
 
 
-def _validate_product_values_if_applicable(
-    db: psycopg.Connection, entity_name: str, data: dict[str, Any]
-) -> None:
+def _validate_product_values_if_applicable(db: psycopg.Connection, entity_name: str, data: dict[str, Any]) -> None:
     if entity_name == "families":
         _validate_family(db, data)
         return
@@ -419,10 +420,12 @@ def _validate_family(db: psycopg.Connection, data: dict[str, Any]) -> None:
             raise HTTPException(status_code=422, detail=f"Attribute '{attribute_as_image}' does not exist.")
 
 
-_ATTRIBUTE_OPTION_ALLOWED_TYPES: frozenset[str] = frozenset({
-    "pim_catalog_simpleselect",
-    "pim_catalog_multiselect",
-})
+_ATTRIBUTE_OPTION_ALLOWED_TYPES: frozenset[str] = frozenset(
+    {
+        "pim_catalog_simpleselect",
+        "pim_catalog_multiselect",
+    }
+)
 
 
 def _validate_attribute_option_parent_type(db: psycopg.Connection, attribute_code: str) -> None:
@@ -487,7 +490,7 @@ def _parse_collection_payload(content_type: str, body: bytes, model_class: Any |
             return [{"_invalid": parsed}]
     except UnicodeDecodeError:
         raise HTTPException(status_code=415, detail="Invalid encoding")
-        
+
     raise HTTPException(
         status_code=415,
         detail="Unsupported Media Type. Use application/vnd.akeneo.collection+json or application/json",
@@ -513,27 +516,33 @@ def _apply_table_select_options_flag(
             validations.pop("select_options", None)
     return result
 
+
 # Cache for table columns to avoid repeated metadata queries
 _TABLE_COLUMNS_CACHE: dict[str, set[str]] = {}
 _TABLE_COLUMN_TYPES_CACHE: dict[str, dict[str, str]] = {}
 
+
 def _get_table_columns(db: psycopg.Connection, table: str) -> set[str]:
     if table in _TABLE_COLUMNS_CACHE:
         return _TABLE_COLUMNS_CACHE[table]
-    
+
     rows = db.execute("SELECT column_name FROM information_schema.columns WHERE table_name = %s", (table,)).fetchall()
     columns = {row["column_name"] for row in rows}
     _TABLE_COLUMNS_CACHE[table] = columns
     return columns
 
+
 def _get_table_column_types(db: psycopg.Connection, table: str) -> dict[str, str]:
     if table in _TABLE_COLUMN_TYPES_CACHE:
         return _TABLE_COLUMN_TYPES_CACHE[table]
-    
-    rows = db.execute("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = %s", (table,)).fetchall()
+
+    rows = db.execute(
+        "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = %s", (table,)
+    ).fetchall()
     column_types = {row["column_name"]: row["data_type"] for row in rows}
     _TABLE_COLUMN_TYPES_CACHE[table] = column_types
     return column_types
+
 
 def _convert_value_to_type(value: Any, column_type: str) -> Any:
     if value is None:
@@ -548,32 +557,49 @@ def _convert_value_to_type(value: Any, column_type: str) -> Any:
         return bool(value)
     return value
 
-def _upsert_item(db: psycopg.Connection, table: str, pk_field: str, code: str, data: dict[str, Any], parent_id: str | None = None):
-    tables_with_data = {"asset_families", "deprecated_assets", "deprecated_asset_categories", "deprecated_asset_tags", "subscribers", "family_variants", "attribute_options", "reference_entity_records", "reference_entity_attributes", "assets", "asset_attributes"}
-    
+
+def _upsert_item(
+    db: psycopg.Connection, table: str, pk_field: str, code: str, data: dict[str, Any], parent_id: str | None = None
+):
+    tables_with_data = {
+        "asset_families",
+        "deprecated_assets",
+        "deprecated_asset_categories",
+        "deprecated_asset_tags",
+        "subscribers",
+        "family_variants",
+        "attribute_options",
+        "reference_entity_records",
+        "reference_entity_attributes",
+        "assets",
+        "asset_attributes",
+    }
+
     if table in tables_with_data:
         if parent_id:
             sql = f'INSERT INTO "{table}" (id, parent_id, data) VALUES (%s, %s, %s) ON CONFLICT (id) DO UPDATE SET parent_id = EXCLUDED.parent_id, data = EXCLUDED.data'
             db.execute(sql, (code, parent_id, Jsonb(data)))
         else:
-            sql = f'INSERT INTO "{table}" (id, data) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data'
+            sql = (
+                f'INSERT INTO "{table}" (id, data) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data'
+            )
             db.execute(sql, (code, Jsonb(data)))
     elif table == "subscriptions":
-         pk = f"{parent_id}/{code}"
-         sql = 'INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s) ON CONFLICT (pk) DO UPDATE SET id = EXCLUDED.id, parent_id = EXCLUDED.parent_id, data = EXCLUDED.data'
-         db.execute(sql, (pk, code, parent_id, Jsonb(data)))
+        pk = f"{parent_id}/{code}"
+        sql = "INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s) ON CONFLICT (pk) DO UPDATE SET id = EXCLUDED.id, parent_id = EXCLUDED.parent_id, data = EXCLUDED.data"
+        db.execute(sql, (pk, code, parent_id, Jsonb(data)))
     else:
         columns = []
         placeholders = []
         values = []
         sql_data = dict(data)
-        
+
         if "metadata_info" in sql_data:
             sql_data["metadata"] = sql_data.pop("metadata_info")
-        
+
         pk_val = sql_data.pop(pk_field, None)
         sql_data["id"] = pk_val if pk_val is not None else code
-        
+
         existing_columns = _get_table_columns(db, table)
         column_types = _get_table_column_types(db, table)
 
@@ -593,8 +619,9 @@ def _upsert_item(db: psycopg.Connection, table: str, pk_field: str, code: str, d
             sql = f'INSERT INTO "{table}" ({", ".join(columns)}) VALUES ({", ".join(placeholders)}) ON CONFLICT (id) DO UPDATE SET {update_set}'
         else:
             sql = f'INSERT INTO "{table}" ({", ".join(columns)}) VALUES ({", ".join(placeholders)}) ON CONFLICT (id) DO NOTHING'
-            
+
         db.execute(sql, values)
+
 
 def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
     model = config["model"]
@@ -615,7 +642,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
             search_after_only=is_search_after_only_entity(entity_name),
         )
         entries: list[tuple[str, dict[str, Any]]] = []
-        
+
         if _supports_sql_pagination_path(entity_name, query):
             order_column = "id" if entity_name != "products-uuid" else "uuid"
             if resolved_pagination_type == "page":
@@ -688,9 +715,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                 "self": {
                     "href": build_href(base_path, {**common_params, "pagination_type": "page", "page": query.page})
                 },
-                "first": {
-                    "href": build_href(base_path, {**common_params, "pagination_type": "page", "page": 1})
-                },
+                "first": {"href": build_href(base_path, {**common_params, "pagination_type": "page", "page": 1})},
             }
             if has_previous:
                 links["previous"] = {
@@ -701,8 +726,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                     "href": build_href(base_path, {**common_params, "pagination_type": "page", "page": query.page + 1})
                 }
             page_items = [
-                _apply_table_select_options_flag(entity_name, item, with_table_select_options)
-                for item in page_items
+                _apply_table_select_options_flag(entity_name, item, with_table_select_options) for item in page_items
             ]
             return {
                 "_links": links,
@@ -720,18 +744,24 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
             _apply_table_select_options_flag(entity_name, item, with_table_select_options)
             for item in search_after_items
         ]
-            
+
         links = {
             "self": {
-                "href": build_href(base_path, {**common_params, "pagination_type": "search_after", "search_after": query.search_after})
+                "href": build_href(
+                    base_path, {**common_params, "pagination_type": "search_after", "search_after": query.search_after}
+                )
             },
             "first": {
-                "href": build_href(base_path, {**common_params, "pagination_type": "search_after", "search_after": None})
+                "href": build_href(
+                    base_path, {**common_params, "pagination_type": "search_after", "search_after": None}
+                )
             },
         }
         if next_cursor is not None:
             links["next"] = {
-                "href": build_href(base_path, {**common_params, "pagination_type": "search_after", "search_after": next_cursor})
+                "href": build_href(
+                    base_path, {**common_params, "pagination_type": "search_after", "search_after": next_cursor}
+                )
             }
         return {"_links": links, "_embedded": {"items": search_after_items}}
 
@@ -801,6 +831,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
         background_tasks.add_task(dispatch_event, event_name, data)
 
         from urllib.parse import quote
+
         headers = {"Location": f"/api/rest/v1/{entity_name}/{quote(code)}", "Content-Type": "application/json"}
         return JSONResponse(content={}, status_code=status.HTTP_201_CREATED, headers=headers)
 
@@ -860,7 +891,9 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                     new_identifier = current_identifier
                     patched_data["identifier"] = current_identifier
                 if new_identifier != current_identifier:
-                    existing_identifier = db.execute("SELECT 1 FROM products WHERE id = %s", (new_identifier,)).fetchone()
+                    existing_identifier = db.execute(
+                        "SELECT 1 FROM products WHERE id = %s", (new_identifier,)
+                    ).fetchone()
                     if existing_identifier is not None:
                         raise HTTPException(status_code=409, detail=f"products '{new_identifier}' already exists.")
                     # If we change identifier, we might need to delete old row and insert new one
@@ -887,6 +920,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
         event_name = get_entity_event_name(entity_name, "updated")
         background_tasks.add_task(dispatch_event, event_name, data)
         from urllib.parse import quote
+
         headers = {"Location": f"/api/rest/v1/{entity_name}/{quote(code)}", "Content-Type": "application/json"}
         return Response(status_code=status.HTTP_204_NO_CONTENT, headers=headers)
 
@@ -905,9 +939,9 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
 
         deleted_data = _get_item_data_dict(row)
         if entity_name == "products-uuid":
-             db.execute("DELETE FROM products WHERE uuid = %s", (code,))
+            db.execute("DELETE FROM products WHERE uuid = %s", (code,))
         else:
-             db.execute(f"DELETE FROM {table} WHERE id = %s", (code,))
+            db.execute(f"DELETE FROM {table} WHERE id = %s", (code,))
         db.commit()
 
         event_name = get_entity_event_name(entity_name, "deleted")
@@ -988,14 +1022,25 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                         _validate_product_values_if_applicable(db, entity_name, existing_data)
                         _upsert_item(db, table, pk_field, code, existing_data)
                         responses.append({"line": index + 1, pk_field: code, "status_code": 204})
-                        background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "updated"), existing_data)
+                        background_tasks.add_task(
+                            dispatch_event, get_entity_event_name(entity_name, "updated"), existing_data
+                        )
                 except HTTPException as e:
-                    responses.append({"line": index + 1, pk_field: code, "status_code": e.status_code, "message": str(e.detail)})
+                    responses.append(
+                        {"line": index + 1, pk_field: code, "status_code": e.status_code, "message": str(e.detail)}
+                    )
                     continue
         db.commit()
-        media_type = "application/json" if "application/json" in content_type else "application/vnd.akeneo.collection+json"
-        content = json.dumps(responses) if media_type == "application/json" else "\n".join(json.dumps(r) for r in responses) + "\n"
+        media_type = (
+            "application/json" if "application/json" in content_type else "application/vnd.akeneo.collection+json"
+        )
+        content = (
+            json.dumps(responses)
+            if media_type == "application/json"
+            else "\n".join(json.dumps(r) for r in responses) + "\n"
+        )
         return Response(content=content, media_type=media_type)
+
 
 def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> None:
     model = config["model"]
@@ -1029,8 +1074,12 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
             return items
 
         validate_limit(query.limit)
-        resolved_pagination_type = resolve_pagination_type(query.pagination_type, supports_search_after=supports_search_after_sub_entity(sub_entity_key), search_after_only=is_search_after_only_sub_entity(sub_entity_key))
-        
+        resolved_pagination_type = resolve_pagination_type(
+            query.pagination_type,
+            supports_search_after=supports_search_after_sub_entity(sub_entity_key),
+            search_after_only=is_search_after_only_sub_entity(sub_entity_key),
+        )
+
         order_column = "id"
         if resolved_pagination_type == "page":
             if query.page < 1:
@@ -1047,7 +1096,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
             else:
                 sql = f"SELECT * FROM {table} WHERE parent_id = %s ORDER BY {order_column} LIMIT %s"
                 rows = db.execute(sql, (parent_code, query.limit + 1)).fetchall()
-        
+
         entries = []
         for row in rows:
             entity = _sanitize_row_entity(row, pk_field, model)
@@ -1057,22 +1106,47 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         resolved_path = f"/api/rest/v1/{parent_entity}/{parent_code}/{nested_path}"
         common_params = {"limit": query.limit}
         if resolved_pagination_type == "page":
-            page_items = [e[1] for e in entries[:query.limit]]
-            links = {"self": {"href": build_href(resolved_path, {**common_params, "pagination_type": "page", "page": query.page})}}
+            page_items = [e[1] for e in entries[: query.limit]]
+            links = {
+                "self": {
+                    "href": build_href(resolved_path, {**common_params, "pagination_type": "page", "page": query.page})
+                }
+            }
             if query.page > 1:
-                links["previous"] = {"href": build_href(resolved_path, {**common_params, "pagination_type": "page", "page": query.page - 1})}
+                links["previous"] = {
+                    "href": build_href(
+                        resolved_path, {**common_params, "pagination_type": "page", "page": query.page - 1}
+                    )
+                }
             if len(entries) > query.limit:
-                links["next"] = {"href": build_href(resolved_path, {**common_params, "pagination_type": "page", "page": query.page + 1})}
+                links["next"] = {
+                    "href": build_href(
+                        resolved_path, {**common_params, "pagination_type": "page", "page": query.page + 1}
+                    )
+                }
             return {"_links": links, "current_page": query.page, "_embedded": {"items": page_items}}
 
-        selected = entries[:query.limit]
+        selected = entries[: query.limit]
         next_cursor = selected[-1][0] if len(entries) > query.limit and len(selected) > 0 else None
         links = {
-            "self": {"href": build_href(resolved_path, {**common_params, "pagination_type": "search_after", "search_after": query.search_after})},
-            "first": {"href": build_href(resolved_path, {**common_params, "pagination_type": "search_after", "search_after": None})},
+            "self": {
+                "href": build_href(
+                    resolved_path,
+                    {**common_params, "pagination_type": "search_after", "search_after": query.search_after},
+                )
+            },
+            "first": {
+                "href": build_href(
+                    resolved_path, {**common_params, "pagination_type": "search_after", "search_after": None}
+                )
+            },
         }
         if next_cursor:
-            links["next"] = {"href": build_href(resolved_path, {**common_params, "pagination_type": "search_after", "search_after": next_cursor})}
+            links["next"] = {
+                "href": build_href(
+                    resolved_path, {**common_params, "pagination_type": "search_after", "search_after": next_cursor}
+                )
+            }
         return {"_links": links, "_embedded": {"items": [e[1] for e in selected]}}
 
     @router.get(f"{base_path}/{{code}}")
@@ -1083,7 +1157,9 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         return _sanitize_row_entity(row, pk_field, model)
 
     @router.post(base_path, status_code=201)
-    async def create_sub_item(parent_code: str, request: Request, db: psycopg.Connection = Depends(get_db)) -> JSONResponse:
+    async def create_sub_item(
+        parent_code: str, request: Request, db: psycopg.Connection = Depends(get_db)
+    ) -> JSONResponse:
         if is_attribute_options_sub_entity:
             _validate_attribute_option_parent_type(db, parent_code)
         data = await safe_json_body(request)
@@ -1095,7 +1171,12 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         _upsert_item(db, table, pk_field, code, validated_data, parent_code)
         db.commit()
         from urllib.parse import quote
-        return JSONResponse(content={}, status_code=201, headers={"Location": f"/api/rest/v1/{parent_entity}/{quote(parent_code)}/{nested_path}/{quote(code)}"})
+
+        return JSONResponse(
+            content={},
+            status_code=201,
+            headers={"Location": f"/api/rest/v1/{parent_entity}/{quote(parent_code)}/{nested_path}/{quote(code)}"},
+        )
 
     @router.patch(base_path, status_code=status.HTTP_200_OK)
     async def patch_multiple_sub_items(
@@ -1141,12 +1222,20 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
             responses.append({"line": index + 1, pk_field: code, "status_code": 204})
 
         db.commit()
-        media_type = "application/json" if "application/json" in content_type else "application/vnd.akeneo.collection+json"
-        content = json.dumps(responses) if media_type == "application/json" else "\n".join(json.dumps(response) for response in responses) + "\n"
+        media_type = (
+            "application/json" if "application/json" in content_type else "application/vnd.akeneo.collection+json"
+        )
+        content = (
+            json.dumps(responses)
+            if media_type == "application/json"
+            else "\n".join(json.dumps(response) for response in responses) + "\n"
+        )
         return Response(content=content, media_type=media_type)
 
     @router.patch(f"{base_path}/{{code}}", status_code=204)
-    async def patch_sub_item(parent_code: str, code: str, request: Request, db: psycopg.Connection = Depends(get_db)) -> Response:
+    async def patch_sub_item(
+        parent_code: str, code: str, request: Request, db: psycopg.Connection = Depends(get_db)
+    ) -> Response:
         if is_attribute_options_sub_entity:
             _validate_attribute_option_parent_type(db, parent_code)
         data = await safe_json_body(request)
@@ -1162,26 +1251,34 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         db.commit()
         return Response(status_code=204)
 
+
 def register_ee_workflow_routes(entity_name: str) -> None:
     @router.get(f"/{entity_name}/{{code}}/draft")
     def get_draft(code: str) -> dict[str, str]:
         return {"status": "in_progress", "code": code}
+
     @router.post(f"/{entity_name}/{{code}}/proposal", status_code=201)
     def create_proposal(code: str) -> Response:
         from urllib.parse import quote
+
         return Response(status_code=201, headers={"Location": f"/api/rest/v1/{entity_name}/{quote(code)}/proposal/1"})
+
 
 def register_three_level_routes(parent_entity: str) -> None:
     base_path = f"/{parent_entity}/{{parent_code}}/attributes/{{attribute_code}}/options"
+
     @router.get(base_path)
     def get_three_level_items(parent_code: str, attribute_code: str) -> JSONResponse:
         return JSONResponse(content=[], status_code=200)
+
     @router.get(f"{base_path}/{{code}}")
     def get_three_level_item(parent_code: str, attribute_code: str, code: str) -> JSONResponse:
         return JSONResponse(content={"code": code}, status_code=200)
+
     @router.patch(f"{base_path}/{{code}}", status_code=204)
     async def patch_three_level_item(parent_code: str, attribute_code: str, code: str, request: Request) -> Response:
         return Response(status_code=204)
+
 
 @router.post("/media-files", status_code=201)
 @router.post("/category-media-files", status_code=201)
@@ -1190,44 +1287,94 @@ def register_three_level_routes(parent_entity: str) -> None:
 async def upload_media_file() -> Response:
     return Response(status_code=201, headers={"Location": "/api/rest/v1/media-files/mock-media-code"})
 
+
 @router.get("/media-files/{code}")
 async def get_media_file(code: str) -> JSONResponse:
-    return JSONResponse(content={"code": code, "original_filename": f"{code}.jpg", "mime_type": "image/jpeg", "size": 1024, "extension": "jpg", "_links": {"self": {"href": f"/api/rest/v1/media-files/{code}"}, "download": {"href": f"/api/rest/v1/media-files/{code}/download"}}}, status_code=200)
+    return JSONResponse(
+        content={
+            "code": code,
+            "original_filename": f"{code}.jpg",
+            "mime_type": "image/jpeg",
+            "size": 1024,
+            "extension": "jpg",
+            "_links": {
+                "self": {"href": f"/api/rest/v1/media-files/{code}"},
+                "download": {"href": f"/api/rest/v1/media-files/{code}/download"},
+            },
+        },
+        status_code=200,
+    )
+
 
 @router.get("/media-files/{code}/download")
 @router.get("/category-media-files/{file_path}/download")
 async def download_media_file(code: str | None = None, file_path: str | None = None) -> Response:
-    return Response(content=f"mock-binary-content-for-{code or file_path}".encode(), media_type="application/octet-stream", status_code=200)
+    return Response(
+        content=f"mock-binary-content-for-{code or file_path}".encode(),
+        media_type="application/octet-stream",
+        status_code=200,
+    )
+
 
 @router.get("/assets/{asset_code}/reference-files/{locale_code}")
 async def get_deprecated_asset_reference_file(asset_code: str, locale_code: str) -> dict[str, Any]:
-    return {"code": asset_code, "locale": locale_code, "_link": {"download": {"href": f"/api/rest/v1/assets/{asset_code}/reference-files/{locale_code}/download"}}}
+    return {
+        "code": asset_code,
+        "locale": locale_code,
+        "_link": {"download": {"href": f"/api/rest/v1/assets/{asset_code}/reference-files/{locale_code}/download"}},
+    }
+
 
 @router.get("/assets/{asset_code}/reference-files/{locale_code}/download")
 async def download_deprecated_asset_reference_file(asset_code: str, locale_code: str) -> JSONResponse:
     return JSONResponse(content={}, status_code=200)
 
+
 @router.get("/assets/{asset_code}/variation-files/{channel_code}/{locale_code}")
 async def get_deprecated_asset_variation_file(asset_code: str, channel_code: str, locale_code: str) -> dict[str, Any]:
-    return {"code": asset_code, "channel": channel_code, "locale": locale_code, "_link": {"download": {"href": f"/api/rest/v1/assets/{asset_code}/variation-files/{channel_code}/{locale_code}/download"}}}
+    return {
+        "code": asset_code,
+        "channel": channel_code,
+        "locale": locale_code,
+        "_link": {
+            "download": {
+                "href": f"/api/rest/v1/assets/{asset_code}/variation-files/{channel_code}/{locale_code}/download"
+            }
+        },
+    }
+
 
 @router.get("/assets/{asset_code}/variation-files/{channel_code}/{locale_code}/download")
-async def download_deprecated_asset_variation_file(asset_code: str, channel_code: str, locale_code: str) -> JSONResponse:
+async def download_deprecated_asset_variation_file(
+    asset_code: str, channel_code: str, locale_code: str
+) -> JSONResponse:
     return JSONResponse(content={}, status_code=200)
+
 
 @router.post("/jobs/export/{code}", status_code=201)
 @router.post("/jobs/import/{code}", status_code=201)
 async def launch_job(code: str) -> JSONResponse:
     from urllib.parse import quote
-    return JSONResponse(content={}, status_code=201, headers={"Location": f"/api/rest/v1/jobs/import/{quote(code)}/executions/1", "Content-Type": "application/json"})
+
+    return JSONResponse(
+        content={},
+        status_code=201,
+        headers={
+            "Location": f"/api/rest/v1/jobs/import/{quote(code)}/executions/1",
+            "Content-Type": "application/json",
+        },
+    )
+
 
 @router.get("")
 def get_endpoints() -> dict[str, Any]:
     return {"host": "127.0.0.1:8000", "authentication": {"oauth2": "/api/oauth/v1/token"}, "routes": {}}
 
+
 @router.get("/system-information")
 def get_system_information() -> dict[str, str]:
     return {"version": "7.0.0", "edition": "EE"}
+
 
 def register_routes() -> None:
     for entity_name, config in MODELS.items():
@@ -1239,5 +1386,6 @@ def register_routes() -> None:
         register_ee_workflow_routes(ee_entity_name)
     for parent_entity in ["reference-entities", "asset-families"]:
         register_three_level_routes(parent_entity)
+
 
 register_routes()

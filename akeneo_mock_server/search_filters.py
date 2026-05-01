@@ -64,7 +64,19 @@ def _sql_clause_for_rule(table_name: str, field: str, rule: dict[str, Any]) -> E
         return None
     op = operator.upper()
 
-    tables_with_data = {"asset_families", "deprecated_assets", "deprecated_asset_categories", "deprecated_asset_tags", "subscribers", "family_variants", "reference_entity_records", "reference_entity_attributes", "assets", "asset_attributes", "subscriptions"}
+    tables_with_data = {
+        "asset_families",
+        "deprecated_assets",
+        "deprecated_asset_categories",
+        "deprecated_asset_tags",
+        "subscribers",
+        "family_variants",
+        "reference_entity_records",
+        "reference_entity_attributes",
+        "assets",
+        "asset_attributes",
+        "subscriptions",
+    }
 
     column = exp.column(field, table=table_name)
     if table_name in tables_with_data:
@@ -90,8 +102,7 @@ def _sql_clause_for_rule(table_name: str, field: str, rule: dict[str, Any]) -> E
         ):
             return None
         list_exprs = [
-            exp.Literal.string(str(v)) if isinstance(v, str) else exp.Literal.number(str(v))
-            for v in expected
+            exp.Literal.string(str(v)) if isinstance(v, str) else exp.Literal.number(str(v)) for v in expected
         ]
         if op == "IN":
             return exp.In(this=column, expressions=list_exprs)
@@ -107,7 +118,7 @@ def _sql_clause_for_rule(table_name: str, field: str, rule: dict[str, Any]) -> E
             pattern = f"{pattern}%"
         else:
             pattern = f"%{pattern}"
-        
+
         return exp.Like(this=exp.func("LOWER", column), expression=exp.Literal.string(pattern.lower()))
 
     return None
@@ -129,7 +140,7 @@ def apply_sql_search_filters(
             clauses.append(exp.And.from_arg_list(field_clauses))
         elif len(field_clauses) == 1:
             clauses.append(field_clauses[0])
-            
+
     if len(clauses) > 1:
         return exp.And.from_arg_list(clauses)
     if len(clauses) == 1:
@@ -393,7 +404,7 @@ def project_entity_values(
 
 
 def collect_filtered_items(
-    db: Any, # psycopg.Connection
+    db: Any,  # psycopg.Connection
     table_name: str,
     pk_field: str,
     limit: int | None,
@@ -406,17 +417,17 @@ def collect_filtered_items(
     model_class: Any | None = None,
 ) -> list[dict[str, Any]]:
     parsed_filters = parse_search_query(search)
-    
+
     query = exp.select("*").from_(table_name)
     where_clause = apply_sql_search_filters(table_name, parsed_filters)
     if where_clause:
         query = query.where(where_clause)
-    
+
     sql = query.sql("postgres")
     rows = db.execute(sql).fetchall()
-    
+
     embedded_items: list[dict[str, Any]] = []
-    
+
     for row in rows:
         entity = _sanitize_row_entity(row, pk_field, model_class)
         if entity is None:
@@ -424,7 +435,7 @@ def collect_filtered_items(
         if not matches_search(entity, parsed_filters, search_locale, search_scope):
             continue
         embedded_items.append(project_entity_values(entity, attributes, locales, scope))
-        
+
     if limit is None:
         return embedded_items
     return embedded_items[:limit]

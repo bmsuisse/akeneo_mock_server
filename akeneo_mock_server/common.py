@@ -94,6 +94,7 @@ def apply_patch(existing: dict[str, Any], patch: dict[str, Any]) -> dict[str, An
         existing[key] = value
     return existing
 
+
 def _get_item_pk(item: Any, pk_field: str) -> str:
     if isinstance(item, Mapping) or (hasattr(item, "keys") and callable(getattr(item, "keys"))):
         # item is likely a dict or psycopg Row
@@ -113,13 +114,14 @@ def _get_item_pk(item: Any, pk_field: str) -> str:
         return str(item.id)
     return str(getattr(item, pk_field, ""))
 
+
 def _get_item_data_dict(item: Any) -> dict[str, Any]:
     if isinstance(item, Mapping) or (hasattr(item, "keys") and callable(getattr(item, "keys"))):
         if "data" in item and item["data"]:
             return safe_loads(item["data"])
         # If it's a row from an explicit table, we need to convert it to a dict and handle JSON columns
         data = dict(item)
-        # 
+        #
         for key, val in data.items():
             if isinstance(val, str) and val.startswith(("{", "[")):
                 try:
@@ -134,19 +136,22 @@ def _get_item_data_dict(item: Any) -> dict[str, Any]:
         return item.model_dump()
     return {}
 
-def _sanitize_row_entity(item: Any, pk_field: str | None = None, model_class: Any | None = None) -> dict[str, Any] | None:
+
+def _sanitize_row_entity(
+    item: Any, pk_field: str | None = None, model_class: Any | None = None
+) -> dict[str, Any] | None:
     pk = _get_item_pk(item, pk_field or "")
     if not is_valid_code(pk):
         return None
     data = _get_item_data_dict(item)
-    
+
     # Map 'id' to 'identifier' and 'code' to satisfy various Pydantic models
     if "id" in data:
         if "identifier" not in data or data["identifier"] is None:
             data["identifier"] = data["id"]
         if "code" not in data or data["code"] is None:
             data["code"] = data["id"]
-        
+
     if model_class:
         try:
             # Validate and dump using the model to handle types (booleans) and aliases (metadata)
