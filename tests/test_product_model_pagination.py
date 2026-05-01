@@ -55,3 +55,38 @@ def test_search_after_on_product_models() -> None:
     assert len(third_items) == 1
     assert "next" not in third_body["_links"]
     assert third_items[0]["code"] == "pm-pag-5"
+
+def test_search_after_with_filter_on_product_models() -> None:
+    _setup_family_variant("pm-fam-search", "pm-fam-search-v", ["color"])
+    
+    # Create 3 product models in this family
+    for i in ["a", "b", "c"]:
+        client.post(
+            "/api/rest/v1/product-models",
+            json={"code": f"pm-search-{i}", "family": "pm-fam-search", "family_variant": "pm-fam-search-v"},
+        )
+    # Create 1 product model in another family
+    _setup_family_variant("pm-fam-other", "pm-fam-other-v", ["color"])
+    client.post(
+        "/api/rest/v1/product-models",
+        json={"code": "pm-other", "family": "pm-fam-other", "family_variant": "pm-fam-other-v"},
+    )
+
+    params = {
+        "pagination_type": "search_after",
+        "search": '{"family":[{"operator":"=","value":"pm-fam-search"}]}',
+        "limit": 2,
+    }
+    
+    first_page = client.get("/api/rest/v1/product-models", params=params)
+    assert first_page.status_code == 200
+    first_body = first_page.json()
+    assert len(first_body["_embedded"]["items"]) == 2
+    assert "next" in first_body["_links"]
+
+    next_href = first_body["_links"]["next"]["href"]
+    second_page = client.get(next_href)
+    assert second_page.status_code == 200
+    second_body = second_page.json()
+    assert len(second_body["_embedded"]["items"]) == 1
+    assert second_body["_embedded"]["items"][0]["code"] == "pm-search-c"

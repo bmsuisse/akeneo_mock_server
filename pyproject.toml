@@ -28,6 +28,7 @@ dev = [
     "ruff>=0.15.4",
     "schemathesis>=4.11.0",
     "pyright>=1.1.408",
+    "skillup>=0.3.2",
 ]
 
 [tool.pyright]
