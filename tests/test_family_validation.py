@@ -1,5 +1,4 @@
 """Test to understand family attribute validation requirements"""
-import pytest
 from fastapi.testclient import TestClient
 from akeneo_mock_server.app import app
 

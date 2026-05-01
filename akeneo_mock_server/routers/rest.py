@@ -354,6 +354,33 @@ def _validate_product_values(db: psycopg.Connection, values: dict[str, Any]) -> 
             _validate_attribute_value(attr_code, attr_type, attr, data)
 
 
+def _validate_product_family_attributes(db: psycopg.Connection, data: dict[str, Any]) -> None:
+    family_code = data.get("family")
+    if not family_code:
+        return
+    values = data.get("values")
+    if not values or not isinstance(values, dict):
+        return
+    family_row = db.execute("SELECT attributes FROM families WHERE id = %s", (family_code,)).fetchone()
+    if family_row is None:
+        return
+    raw = family_row.get("attributes")
+    if raw is None:
+        return
+    if isinstance(raw, list):
+        family_attributes = set(raw)
+    elif isinstance(raw, str):
+        family_attributes = set(json.loads(raw))
+    else:
+        return
+    for attr_code in values:
+        if attr_code not in family_attributes:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}' does not belong to family '{family_code}'.",
+            )
+
+
 def _validate_product_values_if_applicable(
     db: psycopg.Connection, entity_name: str, data: dict[str, Any]
 ) -> None:
@@ -365,6 +392,8 @@ def _validate_product_values_if_applicable(
     values = data.get("values")
     if values and isinstance(values, dict):
         _validate_product_values(db, values)
+    if entity_name in ("products", "products-uuid"):
+        _validate_product_family_attributes(db, data)
 
 
 def _validate_family(db: psycopg.Connection, data: dict[str, Any]) -> None:
