@@ -400,3 +400,80 @@ def test_event_platform_webhooks():
 
     res = client.get(f"/api/v1/subscribers/{subscriber_id}")
     assert res.status_code == 404
+
+
+def test_family_variant_axes_must_belong_to_family():
+    family_code = "fv-test-family"
+    attr_in = "fv-attr-in-family"
+    attr_also_in = "fv-attr-also-in-family"
+    attr_out = "fv-attr-not-in-family"
+
+    for attr_code in [attr_in, attr_also_in, attr_out]:
+        client.post("/api/rest/v1/attributes", json={"code": attr_code, "type": "pim_catalog_simpleselect"})
+
+    client.post(
+        "/api/rest/v1/families",
+        json={"code": family_code, "attributes": [attr_in, attr_also_in], "attribute_as_label": attr_in},
+    )
+
+    res = client.post(
+        f"/api/rest/v1/families/{family_code}/variants",
+        json={
+            "code": "fv-bad-axis",
+            "variant_attribute_sets": [{"level": 1, "axes": [attr_out], "attributes": [attr_in]}],
+        },
+    )
+    assert res.status_code == 422
+    assert attr_out in res.json()["detail"]
+
+    res = client.post(
+        f"/api/rest/v1/families/{family_code}/variants",
+        json={
+            "code": "fv-bad-attribute",
+            "variant_attribute_sets": [{"level": 1, "axes": [attr_in], "attributes": [attr_out]}],
+        },
+    )
+    assert res.status_code == 422
+    assert attr_out in res.json()["detail"]
+
+    res = client.post(
+        f"/api/rest/v1/families/{family_code}/variants",
+        json={
+            "code": "fv-ok",
+            "variant_attribute_sets": [{"level": 1, "axes": [attr_in], "attributes": [attr_also_in]}],
+        },
+    )
+    assert res.status_code == 201
+
+
+def test_family_variant_patch_axes_must_belong_to_family():
+    family_code = "fv-patch-test-family"
+    attr_in = "fv-patch-attr-in"
+    attr_out = "fv-patch-attr-out"
+
+    for attr_code in [attr_in, attr_out]:
+        client.post("/api/rest/v1/attributes", json={"code": attr_code, "type": "pim_catalog_simpleselect"})
+
+    client.post(
+        "/api/rest/v1/families",
+        json={"code": family_code, "attributes": [attr_in], "attribute_as_label": attr_in},
+    )
+
+    res = client.patch(
+        f"/api/rest/v1/families/{family_code}/variants/fv-patch-bad",
+        json={
+            "code": "fv-patch-bad",
+            "variant_attribute_sets": [{"level": 1, "axes": [attr_out], "attributes": []}],
+        },
+    )
+    assert res.status_code == 422
+    assert attr_out in res.json()["detail"]
+
+    res = client.patch(
+        f"/api/rest/v1/families/{family_code}/variants/fv-patch-ok",
+        json={
+            "code": "fv-patch-ok",
+            "variant_attribute_sets": [{"level": 1, "axes": [attr_in], "attributes": []}],
+        },
+    )
+    assert res.status_code == 204
