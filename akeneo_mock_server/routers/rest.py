@@ -118,8 +118,22 @@ _ENTITIES_WITH_VALUES: frozenset[str] = frozenset(
 )
 
 
-def _validate_attribute_value(attr_code: str, attr_type: str, attr: dict[str, Any], data: Any) -> None:
-    """Raise HTTPException 422 if data violates the attribute's validation rules."""
+def _validate_select_options(db: psycopg.Connection, attr_code: str, option_codes: list[str]) -> None:
+    rows = db.execute("SELECT id FROM attribute_options WHERE parent_id = %s", (attr_code,)).fetchall()
+    if not rows:
+        return
+    valid = {row["id"] for row in rows}
+    for code in option_codes:
+        if code not in valid:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Attribute '{attr_code}': option '{code}' does not exist.",
+            )
+
+
+def _validate_attribute_value(
+    attr_code: str, attr_type: str, attr: dict[str, Any], data: Any, db: psycopg.Connection | None = None
+) -> None:
     if attr_type in ("pim_catalog_text", "pim_catalog_textarea", "pim_catalog_identifier"):
         if not isinstance(data, str):
             raise HTTPException(
@@ -240,6 +254,8 @@ def _validate_attribute_value(attr_code: str, attr_type: str, attr: dict[str, An
                 status_code=422,
                 detail=f"Attribute '{attr_code}': expected a string.",
             )
+        if attr_type == "pim_catalog_simpleselect" and db is not None:
+            _validate_select_options(db, attr_code, [data])
 
     elif attr_type in (
         "pim_catalog_multiselect",
@@ -253,6 +269,8 @@ def _validate_attribute_value(attr_code: str, attr_type: str, attr: dict[str, An
                 status_code=422,
                 detail=f"Attribute '{attr_code}': expected an array of strings.",
             )
+        if attr_type == "pim_catalog_multiselect" and db is not None:
+            _validate_select_options(db, attr_code, data)
 
     elif attr_type == "pim_catalog_metric":
         if not isinstance(data, dict):
@@ -354,7 +372,7 @@ def _validate_product_values(db: psycopg.Connection, values: dict[str, Any]) -> 
             data = entry.get("data")
             if data is None:
                 continue
-            _validate_attribute_value(attr_code, attr_type, attr, data)
+            _validate_attribute_value(attr_code, attr_type, attr, data, db)
 
 
 def _validate_product_family_attributes(db: psycopg.Connection, data: dict[str, Any]) -> None:

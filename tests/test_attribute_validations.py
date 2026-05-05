@@ -644,3 +644,62 @@ class TestProductLinkFormatRestriction:
         client.post("/api/rest/v1/products", json={"identifier": "p-plfmt-patch"})
         res = _patch_product("p-plfmt-patch", {"pl_fmt_9": _value(["product", "uuid"])})
         assert res.status_code == 422
+
+
+def _create_option(attribute_code: str, option_code: str) -> None:
+    res = client.post(
+        f"/api/rest/v1/attributes/{attribute_code}/options",
+        json={"code": option_code, "attribute": attribute_code, "sort_order": 0, "labels": {}},
+    )
+    assert res.status_code == 201, f"Failed to create option {option_code!r}: {res.text}"
+
+
+class TestSelectOptionValidation:
+    def test_simpleselect_with_valid_option_succeeds(self):
+        _create_attribute("sel_opt_1", "pim_catalog_simpleselect")
+        _create_option("sel_opt_1", "blue")
+        res = _create_product("p-selopt-1", {"sel_opt_1": _value("blue")})
+        assert res.status_code == 201
+
+    def test_simpleselect_with_invalid_option_returns_422(self):
+        _create_attribute("sel_opt_2", "pim_catalog_simpleselect")
+        _create_option("sel_opt_2", "blue")
+        res = _create_product("p-selopt-2", {"sel_opt_2": _value("red")})
+        assert res.status_code == 422
+
+    def test_simpleselect_without_options_accepts_any_value(self):
+        _create_attribute("sel_opt_3", "pim_catalog_simpleselect")
+        res = _create_product("p-selopt-3", {"sel_opt_3": _value("anything")})
+        assert res.status_code == 201
+
+    def test_multiselect_with_all_valid_options_succeeds(self):
+        _create_attribute("ms_opt_1", "pim_catalog_multiselect")
+        _create_option("ms_opt_1", "leather")
+        _create_option("ms_opt_1", "cotton")
+        res = _create_product("p-msopt-1", {"ms_opt_1": _value(["leather", "cotton"])})
+        assert res.status_code == 201
+
+    def test_multiselect_with_one_invalid_option_returns_422(self):
+        _create_attribute("ms_opt_2", "pim_catalog_multiselect")
+        _create_option("ms_opt_2", "leather")
+        res = _create_product("p-msopt-2", {"ms_opt_2": _value(["leather", "silk"])})
+        assert res.status_code == 422
+
+    def test_multiselect_without_options_accepts_any_values(self):
+        _create_attribute("ms_opt_3", "pim_catalog_multiselect")
+        res = _create_product("p-msopt-3", {"ms_opt_3": _value(["anything", "goes"])})
+        assert res.status_code == 201
+
+    def test_patch_simpleselect_with_invalid_option_returns_422(self):
+        _create_attribute("sel_opt_patch", "pim_catalog_simpleselect")
+        _create_option("sel_opt_patch", "blue")
+        client.post("/api/rest/v1/products", json={"identifier": "p-selopt-patch"})
+        res = _patch_product("p-selopt-patch", {"sel_opt_patch": _value("red")})
+        assert res.status_code == 422
+
+    def test_patch_multiselect_with_invalid_option_returns_422(self):
+        _create_attribute("ms_opt_patch2", "pim_catalog_multiselect")
+        _create_option("ms_opt_patch2", "leather")
+        client.post("/api/rest/v1/products", json={"identifier": "p-msopt-patch2"})
+        res = _patch_product("p-msopt-patch2", {"ms_opt_patch2": _value(["leather", "invalid"])})
+        assert res.status_code == 422
