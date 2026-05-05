@@ -58,12 +58,18 @@ def test_filter_families_by_code_equals():
 # ---------------------------------------------------------------------------
 
 
-def _create_family(code: str):
-    client.post("/api/rest/v1/families", json={"code": code})
+def _ensure_attribute(code: str) -> None:
+    client.post("/api/rest/v1/attributes", json={"code": code, "type": "pim_catalog_simpleselect"})
+
+
+def _create_family(code: str, attributes: list[str] | None = None) -> None:
+    for attr in attributes or []:
+        _ensure_attribute(attr)
+    client.post("/api/rest/v1/families", json={"code": code, "attributes": attributes or []})
 
 
 def test_create_family_variant_persists_variant_attribute_sets():
-    _create_family("fam-var-1")
+    _create_family("fam-var-1", ["color", "size"])
     payload = {
         "code": "fam-var-1-color",
         "labels": {"en_US": "By Color"},
@@ -80,7 +86,7 @@ def test_create_family_variant_persists_variant_attribute_sets():
 
 
 def test_create_family_variant_persists_labels():
-    _create_family("fam-var-2")
+    _create_family("fam-var-2", ["size"])
     payload = {
         "code": "fam-var-2-size",
         "labels": {"en_US": "By Size", "fr_FR": "Par Taille"},
@@ -93,7 +99,7 @@ def test_create_family_variant_persists_labels():
 
 
 def test_list_family_variants_includes_variant_attribute_sets():
-    _create_family("fam-var-3")
+    _create_family("fam-var-3", ["attr1", "attr2"])
     for i in range(1, 3):
         client.post(
             "/api/rest/v1/families/fam-var-3/variants",
@@ -112,7 +118,7 @@ def test_list_family_variants_includes_variant_attribute_sets():
 
 
 def test_create_family_variant_with_multiple_levels():
-    _create_family("fam-var-4")
+    _create_family("fam-var-4", ["color", "size", "weight"])
     payload = {
         "code": "fam-var-4-multi",
         "variant_attribute_sets": [
@@ -130,7 +136,7 @@ def test_create_family_variant_with_multiple_levels():
 
 
 def test_patch_family_variant_updates_variant_attribute_sets():
-    _create_family("fam-var-5")
+    _create_family("fam-var-5", ["color", "size"])
     client.post(
         "/api/rest/v1/families/fam-var-5/variants",
         json={
