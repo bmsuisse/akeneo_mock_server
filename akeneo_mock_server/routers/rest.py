@@ -420,6 +420,40 @@ def _validate_family(db: psycopg.Connection, data: dict[str, Any]) -> None:
             raise HTTPException(status_code=422, detail=f"Attribute '{attribute_as_image}' does not exist.")
 
 
+def _validate_family_variant_attribute_sets(db: psycopg.Connection, family_code: str, data: dict[str, Any]) -> None:
+    variant_attribute_sets = data.get("variant_attribute_sets")
+    if not variant_attribute_sets:
+        return
+
+    family_row = db.execute("SELECT attributes FROM families WHERE id = %s", (family_code,)).fetchone()
+    if family_row is None:
+        raise HTTPException(status_code=422, detail=f"Family '{family_code}' does not exist.")
+
+    raw = family_row.get("attributes")
+    if raw is None:
+        family_attributes: set[str] = set()
+    elif isinstance(raw, list):
+        family_attributes = set(raw)
+    elif isinstance(raw, str):
+        family_attributes = set(json.loads(raw))
+    else:
+        family_attributes = set()
+
+    for attr_set in variant_attribute_sets:
+        if isinstance(attr_set, dict):
+            axes: list[str] = attr_set.get("axes") or []
+            attributes: list[str] = attr_set.get("attributes") or []
+        else:
+            axes = getattr(attr_set, "axes", None) or []
+            attributes = getattr(attr_set, "attributes", None) or []
+        for attr_code in axes + attributes:
+            if attr_code not in family_attributes:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Attribute '{attr_code}' is not part of family '{family_code}'.",
+                )
+
+
 _ATTRIBUTE_OPTION_ALLOWED_TYPES: frozenset[str] = frozenset(
     {
         "pim_catalog_simpleselect",
@@ -1049,6 +1083,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
     nested_path = config["nested_path"]
     table = config["table"]
     is_attribute_options_sub_entity = sub_entity_key == "attributes/attribute-options"
+    is_family_variants_sub_entity = sub_entity_key == "families/family-variants"
     is_non_paginated_sub_entity = sub_entity_key in {
         "reference-entities/attributes",
         "asset-families/attributes",
@@ -1167,6 +1202,8 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         code = data.get(pk_field)
         if not isinstance(code, str) or not code:
             raise HTTPException(status_code=422)
+        if is_family_variants_sub_entity:
+            _validate_family_variant_attribute_sets(db, parent_code, data)
         validated_data = _validate_complete_payload(data, model)
         _upsert_item(db, table, pk_field, code, validated_data, parent_code)
         db.commit()
@@ -1208,6 +1245,14 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
                 payload = dict(data)
                 payload[pk_field] = code
                 payload["parent_id"] = parent_code
+                if is_family_variants_sub_entity:
+                    try:
+                        _validate_family_variant_attribute_sets(db, parent_code, payload)
+                    except HTTPException as e:
+                        responses.append(
+                            {"line": index + 1, pk_field: code, "status_code": e.status_code, "message": str(e.detail)}
+                        )
+                        continue
                 validated_payload = _validate_complete_payload(payload, model)
                 _upsert_item(db, table, pk_field, code, validated_payload, parent_code)
                 responses.append({"line": index + 1, pk_field: code, "status_code": 201})
@@ -1217,6 +1262,14 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
             existing_data.update(data)
             existing_data[pk_field] = code
             existing_data["parent_id"] = parent_code
+            if is_family_variants_sub_entity:
+                try:
+                    _validate_family_variant_attribute_sets(db, parent_code, existing_data)
+                except HTTPException as e:
+                    responses.append(
+                        {"line": index + 1, pk_field: code, "status_code": e.status_code, "message": str(e.detail)}
+                    )
+                    continue
             validated_payload = _validate_complete_payload(existing_data, model)
             _upsert_item(db, table, pk_field, code, validated_payload, parent_code)
             responses.append({"line": index + 1, pk_field: code, "status_code": 204})
@@ -1246,6 +1299,8 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
             data = existing
         data[pk_field] = code
         data["parent_id"] = parent_code
+        if is_family_variants_sub_entity:
+            _validate_family_variant_attribute_sets(db, parent_code, data)
         validated_data = _validate_complete_payload(data, model)
         _upsert_item(db, table, pk_field, code, validated_data, parent_code)
         db.commit()
