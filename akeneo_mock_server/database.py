@@ -2,7 +2,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 from typing import Any, Generator
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pathlib import Path
 import time
 
@@ -269,8 +269,19 @@ class FamilyVariantModel(SubEntityBase):
     variant_attribute_sets: list[VariantAttributeSet] | None = Field(default_factory=list)
 
 
-class ReferenceEntityRecordModel(SubEntityBase):
-    pass
+class ReferenceEntityRecordModel(BaseModel):
+    code: str
+    values: dict[str, Any] = Field(default_factory=dict)
+    created: str | None = None
+    updated: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def inject_values(cls, v: Any) -> Any:
+        if isinstance(v, dict) and "values" not in v:
+            v = dict(v)
+            v["values"] = {}
+        return v
 
 
 class ReferenceEntityAttributeModel(SubEntityBase):
