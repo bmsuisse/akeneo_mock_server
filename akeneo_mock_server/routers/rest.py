@@ -1102,6 +1102,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
     table = config["table"]
     is_attribute_options_sub_entity = sub_entity_key == "attributes/attribute-options"
     is_family_variants_sub_entity = sub_entity_key == "families/family-variants"
+    is_reference_entity_records = sub_entity_key == "reference-entities/records"
     is_non_paginated_sub_entity = sub_entity_key in {
         "reference-entities/attributes",
         "asset-families/attributes",
@@ -1277,7 +1278,10 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
                 continue
 
             existing_data = _get_item_data_dict(row)
-            existing_data.update(data)
+            if is_reference_entity_records:
+                existing_data = apply_patch(existing_data, data)
+            else:
+                existing_data.update(data)
             existing_data[pk_field] = code
             existing_data["parent_id"] = parent_code
             if is_family_variants_sub_entity:
@@ -1313,8 +1317,11 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         row = db.execute(f"SELECT * FROM {table} WHERE parent_id = %s AND id = %s", (parent_code, code)).fetchone()
         if row:
             existing = _get_item_data_dict(row)
-            existing.update(data)
-            data = existing
+            if is_reference_entity_records:
+                data = apply_patch(existing, data)
+            else:
+                existing.update(data)
+                data = existing
         data[pk_field] = code
         data["parent_id"] = parent_code
         if is_family_variants_sub_entity:
