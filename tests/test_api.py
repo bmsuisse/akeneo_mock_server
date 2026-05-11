@@ -477,3 +477,126 @@ def test_family_variant_patch_axes_must_belong_to_family():
         },
     )
     assert res.status_code == 204
+
+
+def test_reference_entity_record_values_always_returned():
+    entity_code = "ref-ent-values"
+    record_code = "record-no-values"
+
+    client.post("/api/rest/v1/reference-entities", json={"code": entity_code})
+    client.patch(
+        f"/api/rest/v1/reference-entities/{entity_code}/records/{record_code}",
+        json={"code": record_code},
+    )
+
+    res = client.get(f"/api/rest/v1/reference-entities/{entity_code}/records/{record_code}")
+    assert res.status_code == 200
+    payload = res.json()
+    assert payload["code"] == record_code
+    assert "values" in payload
+    assert payload["values"] == {}
+
+
+def test_reference_entity_record_values_stored_and_returned():
+    entity_code = "ref-ent-with-values"
+    record_code = "kartell"
+
+    client.post("/api/rest/v1/reference-entities", json={"code": entity_code})
+    client.patch(
+        f"/api/rest/v1/reference-entities/{entity_code}/records/{record_code}",
+        json={
+            "code": record_code,
+            "values": {
+                "label": [{"locale": "en_US", "channel": None, "data": "Kartell"}],
+                "description": [{"locale": "en_US", "channel": None, "data": "Italian furniture"}],
+            },
+        },
+    )
+
+    res = client.get(f"/api/rest/v1/reference-entities/{entity_code}/records/{record_code}")
+    assert res.status_code == 200
+    payload = res.json()
+    assert payload["code"] == record_code
+    assert payload["values"]["label"] == [{"locale": "en_US", "channel": None, "data": "Kartell"}]
+    assert payload["values"]["description"] == [{"locale": "en_US", "channel": None, "data": "Italian furniture"}]
+
+
+def test_reference_entity_record_values_patch_merges_locale():
+    entity_code = "ref-ent-merge"
+    record_code = "lexon"
+
+    client.post("/api/rest/v1/reference-entities", json={"code": entity_code})
+    client.patch(
+        f"/api/rest/v1/reference-entities/{entity_code}/records/{record_code}",
+        json={
+            "code": record_code,
+            "values": {
+                "label": [
+                    {"locale": "en_US", "channel": None, "data": "Lexon EN"},
+                    {"locale": "fr_FR", "channel": None, "data": "Lexon FR"},
+                ],
+            },
+        },
+    )
+
+    client.patch(
+        f"/api/rest/v1/reference-entities/{entity_code}/records/{record_code}",
+        json={
+            "values": {
+                "label": [{"locale": "en_US", "channel": None, "data": "Lexon EN updated"}],
+                "description": [{"locale": "en_US", "channel": None, "data": "A brand"}],
+            }
+        },
+    )
+
+    res = client.get(f"/api/rest/v1/reference-entities/{entity_code}/records/{record_code}")
+    assert res.status_code == 200
+    payload = res.json()
+    labels = {v["locale"]: v["data"] for v in payload["values"]["label"]}
+    assert labels["en_US"] == "Lexon EN updated"
+    assert labels["fr_FR"] == "Lexon FR"
+    assert payload["values"]["description"] == [{"locale": "en_US", "channel": None, "data": "A brand"}]
+
+
+def test_reference_entity_records_list_has_values():
+    entity_code = "ref-ent-list-values"
+
+    client.post("/api/rest/v1/reference-entities", json={"code": entity_code})
+    for code, label in [("rec1", "Record One"), ("rec2", "Record Two")]:
+        client.patch(
+            f"/api/rest/v1/reference-entities/{entity_code}/records/{code}",
+            json={"code": code, "values": {"label": [{"locale": "en_US", "channel": None, "data": label}]}},
+        )
+
+    res = client.get(f"/api/rest/v1/reference-entities/{entity_code}/records")
+    assert res.status_code == 200
+    items = res.json()["_embedded"]["items"]
+    assert len(items) == 2
+    for item in items:
+        assert "values" in item
+        assert "label" in item["values"]
+
+
+def test_reference_entity_records_bulk_patch():
+    entity_code = "ref-ent-bulk"
+
+    client.post("/api/rest/v1/reference-entities", json={"code": entity_code})
+
+    payload = "\n".join(
+        [
+            json.dumps({"code": "brand-a", "values": {"label": [{"locale": "en_US", "channel": None, "data": "A"}]}}),
+            json.dumps({"code": "brand-b", "values": {"label": [{"locale": "en_US", "channel": None, "data": "B"}]}}),
+        ]
+    )
+    res = client.patch(
+        f"/api/rest/v1/reference-entities/{entity_code}/records",
+        content=payload,
+        headers={"Content-Type": "application/vnd.akeneo.collection+json"},
+    )
+    assert res.status_code == 200
+    lines = [json.loads(line) for line in res.text.splitlines() if line.strip()]
+    assert all(line["status_code"] in (201, 204) for line in lines)
+
+    res = client.get(f"/api/rest/v1/reference-entities/{entity_code}/records/brand-a")
+    assert res.status_code == 200
+    assert res.json()["values"]["label"] == [{"locale": "en_US", "channel": None, "data": "A"}]
