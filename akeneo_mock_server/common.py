@@ -54,12 +54,21 @@ def is_valid_code(code: object) -> bool:
 def merge_value_locale_scope(
     existing_arr: list[dict[str, Any]], incoming_arr: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    keyed: dict[tuple[object, object], dict[str, Any]] = {
-        (item.get("locale"), item.get("scope", item.get("channel"))): item for item in existing_arr
-    }
+    keyed: dict[tuple[Any, Any], dict[str, Any]] = {}
+    for item in existing_arr:
+        if not isinstance(item, dict):
+            continue
+        try:
+            keyed[(item.get("locale"), item.get("scope", item.get("channel")))] = item
+        except TypeError:
+            pass
     for item in incoming_arr:
-        key = (item.get("locale"), item.get("scope", item.get("channel")))
-        keyed[key] = item
+        if not isinstance(item, dict):
+            continue
+        try:
+            keyed[(item.get("locale"), item.get("scope", item.get("channel")))] = item
+        except TypeError:
+            pass
     return list(keyed.values())
 
 

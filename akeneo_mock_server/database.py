@@ -273,7 +273,7 @@ class ReferenceEntityRecordModel(BaseModel):
     code: str
     values: dict[str, Any] = Field(default_factory=dict)
     created: str | None = None
-    updated: str | None = None
+    updated: Any | None = None
 
     @model_validator(mode="before")
     @classmethod
