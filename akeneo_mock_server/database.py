@@ -1,3 +1,4 @@
+from contextvars import ContextVar
 import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
@@ -5,48 +6,118 @@ from typing import Any, Generator
 from pydantic import BaseModel, Field, model_validator
 from pathlib import Path
 import time
-
 import os
 
+from psycopg import sql
+
 SCHEMA_SQL_PATH = Path(__file__).with_name("schema.sql")
-_db_pool: ConnectionPool | None = None
-_db_pool_url: str | None = None
+_db_pools: dict[str, ConnectionPool] = {}
+_db_pool_urls: dict[str, str] = {}
+_known_databases: set[str] = set()
+
+db_name_var: ContextVar[str] = ContextVar("db_name", default="akeneo")
 
 
 def get_db_url():
-    return os.environ.get("AKENEO_DATABASE_URL", "postgresql://akeneo:akeneo@localhost:54327/akeneo")
+    base_url = os.environ.get("AKENEO_DATABASE_URL", "postgresql://akeneo:akeneo@localhost:54327/akeneo")
+    db_name = db_name_var.get()
+
+    # Simple replacement of the last part of the URL
+    if "/" in base_url:
+        parts = base_url.rsplit("/", 1)
+        return f"{parts[0]}/{db_name}"
+    return base_url
+
+
+def get_admin_url():
+    base_url = os.environ.get("AKENEO_DATABASE_URL", "postgresql://akeneo:akeneo@localhost:54327/akeneo")
+    if "/" in base_url:
+        parts = base_url.rsplit("/", 1)
+        return f"{parts[0]}/postgres"
+    return base_url
+
+
+def ensure_db_exists(db_name: str):
+    if db_name in _known_databases:
+        return
+
+    admin_url = get_admin_url()
+    with psycopg.connect(admin_url, autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
+            if not cur.fetchone():
+                cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name)))
+                # Initialize it
+                token = db_name_var.set(db_name)
+                try:
+                    init_db()
+                finally:
+                    db_name_var.reset(token)
+
+    _known_databases.add(db_name)
 
 
 def get_db_pool() -> ConnectionPool:
-    global _db_pool
-    global _db_pool_url
+    global _db_pools
+    global _db_pool_urls
 
+    db_name = db_name_var.get()
+    ensure_db_exists(db_name)
     db_url = get_db_url()
-    if _db_pool is not None and _db_pool_url == db_url:
-        return _db_pool
 
-    if _db_pool is not None:
-        _db_pool.close()
+    if db_name in _db_pools and _db_pool_urls.get(db_name) == db_url:
+        return _db_pools[db_name]
 
-    _db_pool = ConnectionPool(
+    if db_name in _db_pools:
+        _db_pools[db_name].close()
+
+    pool = ConnectionPool(
         conninfo=db_url,
         min_size=1,
         max_size=20,
         kwargs={"row_factory": dict_row},
         open=True,
     )
-    _db_pool_url = db_url
-    return _db_pool
+    _db_pools[db_name] = pool
+    _db_pool_urls[db_name] = db_url
+    return pool
 
 
 def close_db_pool() -> None:
-    global _db_pool
-    global _db_pool_url
+    global _db_pools
+    global _db_pool_urls
 
-    if _db_pool is not None:
-        _db_pool.close()
-    _db_pool = None
-    _db_pool_url = None
+    for pool in _db_pools.values():
+        pool.close()
+    _db_pools.clear()
+    _db_pool_urls.clear()
+
+
+def destroy_all_databases() -> list[str]:
+    """Drops all databases starting with 'akeneo' and clears internal state."""
+    global _known_databases
+
+    close_db_pool()
+    admin_url = get_admin_url()
+    dropped = []
+
+    with psycopg.connect(admin_url, autocommit=True) as conn:
+        with conn.cursor() as cur:
+            # Find all databases starting with 'akeneo'
+            cur.execute("SELECT datname FROM pg_database WHERE datname LIKE 'akeneo%'")
+            databases = [row["datname"] for row in cur.fetchall()]
+
+            for db in databases:
+                # Terminate active connections
+                cur.execute(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s AND pid <> pg_backend_pid()",
+                    (db,),
+                )
+                cur.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(db)))
+                dropped.append(db)
+
+    _known_databases.clear()
+    return dropped
 
 
 def get_connection():
