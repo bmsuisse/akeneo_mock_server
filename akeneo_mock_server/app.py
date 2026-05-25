@@ -9,11 +9,12 @@ from fastapi.responses import JSONResponse
 import psycopg
 
 from akeneo_mock_server.common import PatchTypeError
-from akeneo_mock_server.database import close_db_pool
+from akeneo_mock_server.database import close_db_pool, db_name_var
 from akeneo_mock_server.routers.event_platform import router as event_platform_router
 from akeneo_mock_server.routers.oauth import router as oauth_router
 from akeneo_mock_server.routers.rest import router as rest_router
 from akeneo_mock_server.routers.root import router as root_router
+from akeneo_mock_server.routers.admin import router as admin_router
 
 
 @asynccontextmanager
@@ -43,6 +44,15 @@ def _build_internal_error_details(exc: Exception) -> dict[str, Any]:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Mock Akeneo API", lifespan=app_lifespan)
+
+    @app.middleware("http")
+    async def db_name_middleware(request: Request, call_next):
+        db_name = request.headers.get("X-AkeneoMockDB", "akeneo")
+        token = db_name_var.set(db_name)
+        try:
+            return await call_next(request)
+        finally:
+            db_name_var.reset(token)
 
     @app.middleware("http")
     async def body_cache_middleware(request: Request, call_next):
@@ -86,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(rest_router)
     app.include_router(oauth_router)
     app.include_router(event_platform_router)
+    app.include_router(admin_router)
     return app
 
 
