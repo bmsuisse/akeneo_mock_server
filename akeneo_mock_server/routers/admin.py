@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from akeneo_mock_server.database import (
     db_name_var,
     init_db,
@@ -6,8 +7,17 @@ from akeneo_mock_server.database import (
     _db_pools,
 )
 import psycopg
+import secrets
 
 router = APIRouter(prefix="/_admin", tags=["admin"])
+
+
+class BackupRequest(BaseModel):
+    backup_to: str | None = None
+
+
+class RestoreRequest(BaseModel):
+    restore_from: str
 
 
 @router.post("/clear")
@@ -18,24 +28,20 @@ async def clear_database():
 
 
 @router.post("/backup")
-async def backup_database(name: str):
-    """Backup the current database to a new database with the given name."""
+async def backup_database(request: BackupRequest):
+    """Backup the current database to a new database."""
     current_db = db_name_var.get()
+    target_db = request.backup_to or f"akeneo_{secrets.token_hex(4)}"
     admin_url = get_admin_url()
 
     with psycopg.connect(admin_url, autocommit=True) as conn:
         with conn.cursor() as cur:
-            # Drop if exists
-            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,))
+            # Check if target exists
+            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (target_db,))
             if cur.fetchone():
-                cur.execute(
-                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s AND pid <> pg_backend_pid()",
-                    (name,),
-                )
-                cur.execute(f'DROP DATABASE "{name}"')
+                raise HTTPException(status_code=400, detail=f"Target database '{target_db}' already exists")
 
             # Terminate connections to source to allow it to be used as a template
-            # (PostgreSQL requires no active connections to the template database)
             if current_db in _db_pools:
                 _db_pools[current_db].close()
                 del _db_pools[current_db]
@@ -45,23 +51,28 @@ async def backup_database(name: str):
                 (current_db,),
             )
 
-            cur.execute(f'CREATE DATABASE "{name}" WITH TEMPLATE "{current_db}"')
+            cur.execute(f'CREATE DATABASE "{target_db}" WITH TEMPLATE "{current_db}"')
 
-    return {"message": f"Database '{current_db}' backed up to '{name}'"}
+    return {
+        "message": "Database backup successful",
+        "backup_from": current_db,
+        "backup_to": target_db,
+    }
 
 
 @router.post("/restore")
-async def restore_database(name: str):
-    """Restore the current database from a backup with the given name."""
+async def restore_database(request: RestoreRequest):
+    """Restore the current database from a backup."""
     current_db = db_name_var.get()
+    source_db = request.restore_from
     admin_url = get_admin_url()
 
     with psycopg.connect(admin_url, autocommit=True) as conn:
         with conn.cursor() as cur:
             # Check if source exists
-            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,))
+            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (source_db,))
             if not cur.fetchone():
-                raise HTTPException(status_code=404, detail=f"Backup database '{name}' not found")
+                raise HTTPException(status_code=404, detail=f"Backup database '{source_db}' not found")
 
             # Close all pools for current_db
             if current_db in _db_pools:
@@ -75,12 +86,10 @@ async def restore_database(name: str):
             )
 
             cur.execute(f'DROP DATABASE "{current_db}"')
-            cur.execute(f'CREATE DATABASE "{current_db}" WITH TEMPLATE "{name}"')
+            cur.execute(f'CREATE DATABASE "{current_db}" WITH TEMPLATE "{source_db}"')
 
-    return {"message": f"Database '{current_db}' restored from '{name}'"}
-
-
-@router.post("/fork")
-async def fork_database(name: str):
-    """Create a new database 'name' as a fork of the current database."""
-    return await backup_database(name)
+    return {
+        "message": "Database restoration successful",
+        "restore_from": source_db,
+        "restore_to": current_db,
+    }
