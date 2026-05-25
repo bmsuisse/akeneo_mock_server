@@ -5,6 +5,7 @@ from akeneo_mock_server.database import (
     init_db,
     get_admin_url,
     _db_pools,
+    destroy_all_databases,
 )
 import psycopg
 import secrets
@@ -18,6 +19,13 @@ class BackupRequest(BaseModel):
 
 class RestoreRequest(BaseModel):
     restore_from: str
+
+
+@router.post("/destroy_all")
+async def destroy_all():
+    """Drop all databases managed by the mock server (starting with 'akeneo')."""
+    dropped = destroy_all_databases()
+    return {"message": "All databases destroyed", "dropped": dropped}
 
 
 @router.post("/clear")

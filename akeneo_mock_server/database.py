@@ -93,6 +93,33 @@ def close_db_pool() -> None:
     _db_pool_urls.clear()
 
 
+def destroy_all_databases() -> list[str]:
+    """Drops all databases starting with 'akeneo' and clears internal state."""
+    global _known_databases
+
+    close_db_pool()
+    admin_url = get_admin_url()
+    dropped = []
+
+    with psycopg.connect(admin_url, autocommit=True) as conn:
+        with conn.cursor() as cur:
+            # Find all databases starting with 'akeneo'
+            cur.execute("SELECT datname FROM pg_database WHERE datname LIKE 'akeneo%'")
+            databases = [row["datname"] for row in cur.fetchall()]
+
+            for db in databases:
+                # Terminate active connections
+                cur.execute(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s AND pid <> pg_backend_pid()",
+                    (db,),
+                )
+                cur.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(db)))
+                dropped.append(db)
+
+    _known_databases.clear()
+    return dropped
+
+
 def get_connection():
     conn = psycopg.connect(get_db_url(), row_factory=dict_row)
     return conn
