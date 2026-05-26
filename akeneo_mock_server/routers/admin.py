@@ -21,6 +21,19 @@ class RestoreRequest(BaseModel):
     restore_from: str
 
 
+@router.get("/status")
+async def status():
+    """Check if the server is running and the database is accessible."""
+    try:
+        with psycopg.connect(get_admin_url(), autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        return {"status": "ok", "database": db_name_var.get()}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Database connection failed: {exc}")
+
+
 @router.post("/destroy_all")
 async def destroy_all():
     """Drop all databases managed by the mock server (starting with 'akeneo')."""
