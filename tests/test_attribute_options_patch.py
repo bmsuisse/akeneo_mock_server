@@ -51,6 +51,14 @@ def test_patch_attribute_options_collection_json():
         {"line": 2, "code": "green", "status_code": 201},  # 201 for create
     ]
 
+    response = client.get(f"/api/rest/v1/attributes/{attribute_code}/options")
+    assert response.status_code == 200
+    items = response.json()["_embedded"]["items"]
+    codes = [item["code"] for item in items]
+    assert "red" in codes
+    assert "green" in codes
+    assert "blue" in codes
+
     # 6. Verify update
     response = client.get(f"/api/rest/v1/attributes/{attribute_code}/options/red")
     assert response.status_code == 200
