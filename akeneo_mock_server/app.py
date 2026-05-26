@@ -47,7 +47,7 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def db_name_middleware(request: Request, call_next):
-        db_name = request.headers.get("X-AkeneoMockDB", "akeneo")
+        db_name = request.headers.get("X-AkeneoMockDB")
         token = db_name_var.set(db_name)
         try:
             return await call_next(request)

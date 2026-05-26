@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from akeneo_mock_server.database import (
-    db_name_var,
+    _get_db_name,
     init_db,
     get_admin_url,
     _db_pools,
@@ -21,6 +21,19 @@ class RestoreRequest(BaseModel):
     restore_from: str
 
 
+@router.get("/status")
+async def status():
+    """Check if the server is running and the database is accessible."""
+    try:
+        with psycopg.connect(get_admin_url(), autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        return {"status": "ok", "database": _get_db_name()}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Database connection failed: {exc}")
+
+
 @router.post("/destroy_all")
 async def destroy_all():
     """Drop all databases managed by the mock server (starting with 'akeneo')."""
@@ -32,13 +45,13 @@ async def destroy_all():
 async def clear_database():
     """Completely clear the current database and re-initialize it."""
     init_db()
-    return {"message": f"Database '{db_name_var.get()}' cleared"}
+    return {"message": f"Database '{_get_db_name()}' cleared"}
 
 
 @router.post("/backup")
 async def backup_database(request: BackupRequest):
     """Backup the current database to a new database."""
-    current_db = db_name_var.get()
+    current_db = _get_db_name()
     target_db = request.backup_to or f"akeneo_{secrets.token_hex(4)}"
     admin_url = get_admin_url()
 
@@ -71,7 +84,7 @@ async def backup_database(request: BackupRequest):
 @router.post("/restore")
 async def restore_database(request: RestoreRequest):
     """Restore the current database from a backup."""
-    current_db = db_name_var.get()
+    current_db = _get_db_name()
     source_db = request.restore_from
     admin_url = get_admin_url()
 
