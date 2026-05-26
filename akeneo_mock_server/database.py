@@ -74,7 +74,6 @@ def get_db_pool() -> ConnectionPool:
     global _db_pool_urls
 
     db_name = _get_db_name()
-    ensure_db_exists(db_name)
     db_url = get_db_url()
 
     if db_name in _db_pools and _db_pool_urls.get(db_name) == db_url:

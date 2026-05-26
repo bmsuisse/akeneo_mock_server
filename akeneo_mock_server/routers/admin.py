@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from akeneo_mock_server.database import (
     _get_db_name,
+    ensure_db_exists,
     init_db,
     get_admin_url,
     _db_pools,
@@ -32,6 +33,23 @@ async def status():
         return {"status": "ok", "database": _get_db_name()}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Database connection failed: {exc}")
+
+
+@router.post("/ensure_db")
+async def ensure_db():
+    db_name = _get_db_name()
+    ensure_db_exists(db_name)
+    return {"message": f"Database '{db_name}' ensured"}
+
+
+@router.post("/init_db")
+async def init_db_endpoint():
+    from akeneo_mock_server.database import init_db
+
+    db_name = _get_db_name()
+    ensure_db_exists(db_name)
+    init_db()
+    return {"message": f"Database '{db_name}' initialized"}
 
 
 @router.post("/destroy_all")
