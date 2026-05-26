@@ -2,14 +2,17 @@ import subprocess
 import json
 import argparse
 import re
+import os
 
 
 def run_command(command, capture_output=True):
     if capture_output:
         result = subprocess.run(command, capture_output=True, text=True, shell=True)
         if result.returncode != 0:
-            print(f"Error running command: {command}")
-            print(result.stderr)
+            # Only print error if not checking for branch info
+            if "git show" not in command:
+                print(f"Error running command: {command}")
+                print(result.stderr)
             return None
         return result.stdout.strip()
     else:
@@ -22,9 +25,24 @@ def main():
     args = parser.parse_args()
 
     # 1. Get current branch
-    branch = run_command("git rev-parse --abbrev-ref HEAD")
-    if not branch:
-        return
+    branch = os.environ.get("GITHUB_HEAD_REF") or os.environ.get("GITHUB_REF_NAME")
+    if not branch or branch == "HEAD":
+        branch = run_command("git rev-parse --abbrev-ref HEAD")
+
+    if not branch or branch == "HEAD":
+        # Try to get the branch from git log if in detached HEAD
+        git_show = run_command("git show -s --pretty=%d HEAD")
+        if git_show:
+            # Output looks like: (HEAD -> branch_name, origin/branch_name)
+            match = re.search(r"HEAD -> ([^,)]+)", git_show)
+            if match:
+                branch = match.group(1)
+            else:
+                branch = "main"  # Fallback
+        else:
+            branch = "main"
+
+    print(f"Checking runs for branch: {branch}")
 
     # 2. Check for PR to main
     pr_json = run_command(f"gh pr list --head {branch} --base main --json number")
@@ -91,9 +109,8 @@ def main():
 
     # Regex to match: JobName\tStepName\tTimestamp\tMessage
     # Sometimes it's spaces, sometimes tabs.
-    log_pattern = re.compile(r"^.*?\t.*?\t\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\t(.*)$")
-    # Alternative pattern if it's spaces
-    alt_pattern = re.compile(r"^.*?\s+UNKNOWN STEP\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+(.*)$")
+    # We use a more flexible regex that handles both.
+    log_pattern = re.compile(r"^.*?\s+.*?\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s+(.*)$")
 
     for line in lines:
         if "test session starts" in line:
@@ -101,9 +118,6 @@ def main():
 
         if found_pytest:
             match = log_pattern.match(line)
-            if not match:
-                match = alt_pattern.match(line)
-
             message = match.group(1) if match else line
             pytest_lines.append(message)
 

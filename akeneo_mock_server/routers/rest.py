@@ -1035,7 +1035,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                     background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "created"), data)
                     continue
                 existing_data = _get_item_data_dict(row)
-                existing_data.update(data)
+                existing_data = apply_patch(existing_data, data)
                 existing_data["identifier"] = code
                 product_uuid = _ensure_product_uuid(existing_data.get("uuid"), db)
                 existing_data["uuid"] = product_uuid
@@ -1055,7 +1055,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                     background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "created"), data)
                     continue
                 existing_data = _get_item_data_dict(row)
-                existing_data.update(data)
+                existing_data = apply_patch(existing_data, data)
                 existing_data["uuid"] = code
                 _upsert_item(db, "products", "identifier", existing_data.get("identifier", ""), existing_data)
                 responses.append({"line": index + 1, pk_field: code, "status_code": 204})
@@ -1070,7 +1070,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                         background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "created"), data)
                     else:
                         existing_data = _get_item_data_dict(row)
-                        existing_data.update(data)
+                        existing_data = apply_patch(existing_data, data)
                         _validate_product_values_if_applicable(db, entity_name, existing_data)
                         _upsert_item(db, table, pk_field, code, existing_data)
                         responses.append({"line": index + 1, pk_field: code, "status_code": 204})
@@ -1278,10 +1278,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
                 continue
 
             existing_data = _get_item_data_dict(row)
-            if is_reference_entity_records:
-                existing_data = apply_patch(existing_data, data)
-            else:
-                existing_data.update(data)
+            existing_data = apply_patch(existing_data, data)
             existing_data[pk_field] = code
             existing_data["parent_id"] = parent_code
             if is_family_variants_sub_entity:
@@ -1317,11 +1314,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         row = db.execute(f"SELECT * FROM {table} WHERE parent_id = %s AND id = %s", (parent_code, code)).fetchone()
         if row:
             existing = _get_item_data_dict(row)
-            if is_reference_entity_records:
-                data = apply_patch(existing, data)
-            else:
-                existing.update(data)
-                data = existing
+            data = apply_patch(existing, data)
         data[pk_field] = code
         data["parent_id"] = parent_code
         if is_family_variants_sub_entity:
