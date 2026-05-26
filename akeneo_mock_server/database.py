@@ -15,26 +15,38 @@ _db_pools: dict[str, ConnectionPool] = {}
 _db_pool_urls: dict[str, str] = {}
 _known_databases: set[str] = set()
 
-db_name_var: ContextVar[str] = ContextVar("db_name", default="akeneo")
+db_name_var: ContextVar[str | None] = ContextVar("db_name", default=None)
 
 
 def get_db_url():
     base_url = os.environ.get("AKENEO_DATABASE_URL", "postgresql://akeneo:akeneo@localhost:54327/akeneo")
     db_name = db_name_var.get()
 
+    if db_name is None:
+        return base_url
+
     # Simple replacement of the last part of the URL
     if "/" in base_url:
+        prm_part = base_url.split("?")[1] if "?" in base_url else ""
         parts = base_url.rsplit("/", 1)
-        return f"{parts[0]}/{db_name}"
+        return f"{parts[0]}/{db_name}?{prm_part}" if prm_part else f"{parts[0]}/{db_name}"
     return base_url
 
 
 def get_admin_url():
     base_url = os.environ.get("AKENEO_DATABASE_URL", "postgresql://akeneo:akeneo@localhost:54327/akeneo")
     if "/" in base_url:
+        prm_part = base_url.split("?")[1] if "?" in base_url else ""
         parts = base_url.rsplit("/", 1)
-        return f"{parts[0]}/postgres"
+        return f"{parts[0]}/postgres?{prm_part}" if prm_part else f"{parts[0]}/postgres"
     return base_url
+
+
+def _get_db_name():
+    db_name = db_name_var.get()
+    if db_name is None:
+        db_name = get_db_url().rsplit("/", 1)[-1].split("?")[0]
+    return db_name
 
 
 def ensure_db_exists(db_name: str):
@@ -61,7 +73,7 @@ def get_db_pool() -> ConnectionPool:
     global _db_pools
     global _db_pool_urls
 
-    db_name = db_name_var.get()
+    db_name = _get_db_name()
     ensure_db_exists(db_name)
     db_url = get_db_url()
 
