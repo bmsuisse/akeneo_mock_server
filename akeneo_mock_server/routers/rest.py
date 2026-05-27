@@ -359,8 +359,13 @@ def _validate_product_values(db: psycopg.Connection, values: dict[str, Any]) -> 
     attr_codes = [code for code, v in values.items() if isinstance(v, list)]
     if not attr_codes:
         return
-    rows = db.execute("SELECT * FROM attributes WHERE id = ANY(%s)", (attr_codes,)).fetchall()
-    attr_map: dict[str, dict[str, Any]] = {row["id"]: _get_item_data_dict(row) for row in rows}
+    rows = db.execute(
+        "SELECT id, type, max_characters, validation_rule, validation_regexp,"
+        " number_min, number_max, decimals_allowed, negative_allowed, date_min, date_max"
+        " FROM attributes WHERE id = ANY(%s)",
+        (attr_codes,),
+    ).fetchall()
+    attr_map: dict[str, dict[str, Any]] = {row["id"]: dict(row) for row in rows}
     for attr_code, attr_value_list in values.items():
         if not isinstance(attr_value_list, list):
             continue
