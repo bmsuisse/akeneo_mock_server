@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS products (
 );
 
 CREATE INDEX IF NOT EXISTS idx_products_uuid ON products(uuid);
+CREATE INDEX IF NOT EXISTS idx_products_family ON products(family);
+CREATE INDEX IF NOT EXISTS idx_products_parent ON products(parent);
 
 CREATE TABLE IF NOT EXISTS products_uuid (
     id TEXT PRIMARY KEY,
@@ -45,6 +47,7 @@ CREATE TABLE IF NOT EXISTS categories (
     "values" JSONB,
     channel_requirements JSONB
 );
+CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent);
 
 CREATE TABLE IF NOT EXISTS attributes (
     id TEXT PRIMARY KEY,

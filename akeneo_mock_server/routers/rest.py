@@ -1,6 +1,5 @@
 import json
 import re
-from copy import deepcopy
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
@@ -357,14 +356,22 @@ def _validate_attribute_value(
 
 
 def _validate_product_values(db: psycopg.Connection, values: dict[str, Any]) -> None:
-    """Validate each attribute value in a product against its attribute definition."""
+    attr_codes = [code for code, v in values.items() if isinstance(v, list)]
+    if not attr_codes:
+        return
+    rows = db.execute(
+        "SELECT id, type, max_characters, validation_rule, validation_regexp,"
+        " number_min, number_max, decimals_allowed, negative_allowed, date_min, date_max"
+        " FROM attributes WHERE id = ANY(%s)",
+        (attr_codes,),
+    ).fetchall()
+    attr_map: dict[str, dict[str, Any]] = {row["id"]: dict(row) for row in rows}
     for attr_code, attr_value_list in values.items():
         if not isinstance(attr_value_list, list):
             continue
-        attr_row = db.execute("SELECT * FROM attributes WHERE id = %s", (attr_code,)).fetchone()
-        if attr_row is None:
+        attr = attr_map.get(attr_code)
+        if attr is None:
             continue
-        attr = _get_item_data_dict(attr_row)
         attr_type = attr.get("type", "")
         for entry in attr_value_list:
             if not isinstance(entry, dict):
@@ -417,25 +424,33 @@ def _validate_product_values_if_applicable(db: psycopg.Connection, entity_name: 
 
 def _validate_family(db: psycopg.Connection, data: dict[str, Any]) -> None:
     attributes = data.get("attributes")
+    attribute_as_label = data.get("attribute_as_label")
+    attribute_as_image = data.get("attribute_as_image")
+
+    codes_to_check: list[str] = []
     if attributes is not None:
         if not isinstance(attributes, list):
             raise HTTPException(status_code=422, detail="attributes must be a list")
-        for attr_code in attributes:
-            row = db.execute("SELECT 1 FROM attributes WHERE id = %s", (attr_code,)).fetchone()
-            if row is None:
-                raise HTTPException(status_code=422, detail=f"Attribute '{attr_code}' does not exist.")
-
-    attribute_as_label = data.get("attribute_as_label")
+        codes_to_check.extend(attributes)
     if attribute_as_label:
-        row = db.execute("SELECT 1 FROM attributes WHERE id = %s", (attribute_as_label,)).fetchone()
-        if row is None:
-            raise HTTPException(status_code=422, detail=f"Attribute '{attribute_as_label}' does not exist.")
-
-    attribute_as_image = data.get("attribute_as_image")
+        codes_to_check.append(attribute_as_label)
     if attribute_as_image:
-        row = db.execute("SELECT 1 FROM attributes WHERE id = %s", (attribute_as_image,)).fetchone()
-        if row is None:
-            raise HTTPException(status_code=422, detail=f"Attribute '{attribute_as_image}' does not exist.")
+        codes_to_check.append(attribute_as_image)
+
+    if not codes_to_check:
+        return
+
+    rows = db.execute("SELECT id FROM attributes WHERE id = ANY(%s)", (codes_to_check,)).fetchall()
+    existing = {row["id"] for row in rows}
+
+    if attributes is not None:
+        for attr_code in attributes:
+            if attr_code not in existing:
+                raise HTTPException(status_code=422, detail=f"Attribute '{attr_code}' does not exist.")
+    if attribute_as_label and attribute_as_label not in existing:
+        raise HTTPException(status_code=422, detail=f"Attribute '{attribute_as_label}' does not exist.")
+    if attribute_as_image and attribute_as_image not in existing:
+        raise HTTPException(status_code=422, detail=f"Attribute '{attribute_as_image}' does not exist.")
 
 
 def _validate_family_variant_attribute_sets(db: psycopg.Connection, family_code: str, data: dict[str, Any]) -> None:
@@ -559,14 +574,16 @@ def _apply_table_select_options_flag(
     table_configuration = item.get("table_configuration")
     if not isinstance(table_configuration, list):
         return item
-    result = deepcopy(item)
-    for column in result.get("table_configuration", []):
+    stripped_columns = []
+    for column in table_configuration:
         if not isinstance(column, dict):
+            stripped_columns.append(column)
             continue
         validations = column.get("validations")
-        if isinstance(validations, dict):
-            validations.pop("select_options", None)
-    return result
+        if isinstance(validations, dict) and "select_options" in validations:
+            column = {**column, "validations": {k: v for k, v in validations.items() if k != "select_options"}}
+        stripped_columns.append(column)
+    return {**item, "table_configuration": stripped_columns}
 
 
 # Cache for table columns to avoid repeated metadata queries
@@ -1102,7 +1119,6 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
     table = config["table"]
     is_attribute_options_sub_entity = sub_entity_key == "attributes/attribute-options"
     is_family_variants_sub_entity = sub_entity_key == "families/family-variants"
-    is_reference_entity_records = sub_entity_key == "reference-entities/records"
     is_non_paginated_sub_entity = sub_entity_key in {
         "reference-entities/attributes",
         "asset-families/attributes",
