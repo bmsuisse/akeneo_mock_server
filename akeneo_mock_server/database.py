@@ -378,6 +378,11 @@ class AssetAttributeModel(SubEntityBase):
     pass
 
 
+class ThreeLevelAttributeOptionModel(BaseModel):
+    code: str
+    labels: dict[str, Any] = Field(default_factory=dict)
+
+
 class SubscriptionModel(BaseModel):
     pk: str = ""
     id: str

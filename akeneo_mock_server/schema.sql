@@ -245,6 +245,24 @@ CREATE TABLE IF NOT EXISTS asset_attributes (
 
 CREATE INDEX IF NOT EXISTS idx_asset_attributes_parent_id ON asset_attributes(parent_id);
 
+CREATE TABLE IF NOT EXISTS asset_attribute_options (
+    id TEXT PRIMARY KEY,
+    parent_id TEXT,
+    updated TEXT,
+    data JSONB
+);
+
+CREATE INDEX IF NOT EXISTS idx_asset_attribute_options_parent_id ON asset_attribute_options(parent_id);
+
+CREATE TABLE IF NOT EXISTS reference_entity_attribute_options (
+    id TEXT PRIMARY KEY,
+    parent_id TEXT,
+    updated TEXT,
+    data JSONB
+);
+
+CREATE INDEX IF NOT EXISTS idx_reference_entity_attribute_options_parent_id ON reference_entity_attribute_options(parent_id);
+
 CREATE TABLE IF NOT EXISTS subscriptions (
     pk TEXT PRIMARY KEY,
     id TEXT,
@@ -256,4 +274,4 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_id ON subscriptions(id);
 
 CREATE INDEX IF NOT EXISTS idx_subscriptions_parent_id ON subscriptions(parent_id);
 
-TRUNCATE TABLE products, products_uuid, published_products, categories, attributes, attribute_groups, families, channels, locales, currencies, measure_families, measurement_families, association_types, reference_entities, asset_families, product_models, deprecated_assets, deprecated_asset_categories, deprecated_asset_tags, subscribers, attribute_options, family_variants, reference_entity_records, reference_entity_attributes, assets, asset_attributes, subscriptions;
+TRUNCATE TABLE products, products_uuid, published_products, categories, attributes, attribute_groups, families, channels, locales, currencies, measure_families, measurement_families, association_types, reference_entities, asset_families, product_models, deprecated_assets, deprecated_asset_categories, deprecated_asset_tags, subscribers, attribute_options, family_variants, reference_entity_records, reference_entity_attributes, assets, asset_attributes, asset_attribute_options, reference_entity_attribute_options, subscriptions;

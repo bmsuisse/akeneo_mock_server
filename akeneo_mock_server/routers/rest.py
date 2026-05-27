@@ -18,7 +18,7 @@ from akeneo_mock_server.common import (
     safe_json_body,
 )
 from akeneo_mock_server.events import dispatch_event, get_entity_event_name
-from akeneo_mock_server.database import MODELS, SUB_MODELS, get_db
+from akeneo_mock_server.database import MODELS, SUB_MODELS, ThreeLevelAttributeOptionModel, get_db
 from akeneo_mock_server.pagination import (
     build_href,
     is_search_after_only_entity,
@@ -642,6 +642,8 @@ def _upsert_item(
         "reference_entity_attributes",
         "assets",
         "asset_attributes",
+        "asset_attribute_options",
+        "reference_entity_attribute_options",
     }
 
     if table in tables_with_data:
@@ -1360,19 +1362,65 @@ def register_ee_workflow_routes(entity_name: str) -> None:
         return Response(status_code=201, headers={"Location": f"/api/rest/v1/{entity_name}/{quote(code)}/proposal/1"})
 
 
-def register_three_level_routes(parent_entity: str) -> None:
+def register_three_level_routes(parent_entity: str, table: str) -> None:
     base_path = f"/{parent_entity}/{{parent_code}}/attributes/{{attribute_code}}/options"
 
     @router.get(base_path)
-    def get_three_level_items(parent_code: str, attribute_code: str) -> JSONResponse:
-        return JSONResponse(content=[], status_code=200)
+    def get_three_level_items(
+        parent_code: str, attribute_code: str, db: psycopg.Connection = Depends(get_db)
+    ) -> JSONResponse:
+        rows = db.execute(
+            f"SELECT * FROM {table} WHERE parent_id = %s ORDER BY id",
+            (f"{parent_code}:{attribute_code}",),
+        ).fetchall()
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            entity = _sanitize_row_entity(row, "code", ThreeLevelAttributeOptionModel)
+            if entity:
+                items.append(entity)
+        return JSONResponse(content=items, status_code=200)
 
     @router.get(f"{base_path}/{{code}}")
-    def get_three_level_item(parent_code: str, attribute_code: str, code: str) -> JSONResponse:
-        return JSONResponse(content={"code": code}, status_code=200)
+    def get_three_level_item(
+        parent_code: str, attribute_code: str, code: str, db: psycopg.Connection = Depends(get_db)
+    ) -> JSONResponse:
+        row = db.execute(
+            f"SELECT * FROM {table} WHERE id = %s",
+            (f"{parent_code}:{attribute_code}:{code}",),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404)
+        entity = _sanitize_row_entity(row, "code", ThreeLevelAttributeOptionModel)
+        return JSONResponse(content=entity, status_code=200)
 
-    @router.patch(f"{base_path}/{{code}}", status_code=204)
-    async def patch_three_level_item(parent_code: str, attribute_code: str, code: str, request: Request) -> Response:
+    @router.patch(f"{base_path}/{{code}}")
+    async def patch_three_level_item(
+        parent_code: str, attribute_code: str, code: str, request: Request, db: psycopg.Connection = Depends(get_db)
+    ) -> Response:
+        from urllib.parse import quote
+
+        data = await safe_json_body(request)
+        composite_id = f"{parent_code}:{attribute_code}:{code}"
+        composite_parent_id = f"{parent_code}:{attribute_code}"
+        row = db.execute(f"SELECT * FROM {table} WHERE id = %s", (composite_id,)).fetchone()
+        if row:
+            existing = _get_item_data_dict(row)
+            data = apply_patch(existing, data)
+            response_status = 204
+        else:
+            response_status = 201
+        data["code"] = code
+        validated = _validate_complete_payload(data, ThreeLevelAttributeOptionModel)
+        _upsert_item(db, table, "code", composite_id, validated, composite_parent_id)
+        db.commit()
+        if response_status == 201:
+            return JSONResponse(
+                content={},
+                status_code=201,
+                headers={
+                    "Location": f"/api/rest/v1/{parent_entity}/{quote(parent_code)}/attributes/{quote(attribute_code)}/options/{quote(code)}"
+                },
+            )
         return Response(status_code=204)
 
 
@@ -1480,8 +1528,11 @@ def register_routes() -> None:
             register_sub_entity_routes(sub_entity_key, config)
     for ee_entity_name in ["products", "products-uuid", "product-models"]:
         register_ee_workflow_routes(ee_entity_name)
-    for parent_entity in ["reference-entities", "asset-families"]:
-        register_three_level_routes(parent_entity)
+    for parent_entity, table in [
+        ("reference-entities", "reference_entity_attribute_options"),
+        ("asset-families", "asset_attribute_options"),
+    ]:
+        register_three_level_routes(parent_entity, table)
 
 
 register_routes()
