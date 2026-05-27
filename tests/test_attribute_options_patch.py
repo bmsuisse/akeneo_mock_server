@@ -1,3 +1,4 @@
+import json
 from fastapi.testclient import TestClient
 from akeneo_mock_server.app import app
 
@@ -100,3 +101,81 @@ def test_patch_attribute_option_single():
     assert response.status_code == 200
     assert response.json()["sort_order"] == 10
     assert response.json()["labels"] == {"en_US": "Small"}  # Labels should be preserved
+
+
+def test_patch_attribute_options_collection_vnd_json():
+    attribute_code = "material_attr"
+
+    # 1. Create a select attribute
+    client.post(
+        "/api/rest/v1/attributes",
+        json={"code": attribute_code, "type": "pim_catalog_simpleselect"},
+    )
+
+    # 2. PATCH multiple options using application/vnd.akeneo.collection+json (NDJSON)
+    payload = '{"code": "wood", "labels": {"en_US": "Wood"}}\n{"code": "metal", "labels": {"en_US": "Metal"}}'
+    response = client.patch(
+        f"/api/rest/v1/attributes/{attribute_code}/options",
+        content=payload,
+        headers={"Content-Type": "application/vnd.akeneo.collection+json"},
+    )
+    assert response.status_code == 200
+
+    # Response should also be in vnd.akeneo.collection+json format (lines of JSON)
+    lines = response.text.strip().split("\n")
+    assert len(lines) == 2
+    res1 = json.loads(lines[0])
+    res2 = json.loads(lines[1])
+    assert res1["code"] == "wood"
+    assert res1["status_code"] == 201
+    assert res2["code"] == "metal"
+    assert res2["status_code"] == 201
+
+    # 3. Verify with GET collection
+    response = client.get(f"/api/rest/v1/attributes/{attribute_code}/options")
+    assert response.status_code == 200
+    items = response.json()["_embedded"]["items"]
+    codes = {item["code"] for item in items}
+    assert "wood" in codes
+    assert "metal" in codes
+
+    # 4. Update one and add another
+    update_payload = (
+        '{"code": "wood", "labels": {"en_US": "Fine Wood"}}\n{"code": "plastic", "labels": {"en_US": "Plastic"}}'
+    )
+    response = client.patch(
+        f"/api/rest/v1/attributes/{attribute_code}/options",
+        content=update_payload,
+        headers={"Content-Type": "application/vnd.akeneo.collection+json"},
+    )
+    assert response.status_code == 200
+    lines = response.text.strip().split("\n")
+    res1 = json.loads(lines[0])
+    res2 = json.loads(lines[1])
+    assert res1["code"] == "wood"
+    assert res1["status_code"] == 204
+    assert res2["code"] == "plastic"
+    assert res2["status_code"] == 201
+
+    # 5. Verify updates
+    response = client.get(f"/api/rest/v1/attributes/{attribute_code}/options/wood")
+    assert response.status_code == 200
+    assert response.json()["labels"]["en_US"] == "Fine Wood"
+
+
+def test_patch_attribute_options_invalid_attribute_type():
+    attribute_code = "text_attr"
+
+    # 1. Create a text attribute (doesn't support options)
+    client.post(
+        "/api/rest/v1/attributes",
+        json={"code": attribute_code, "type": "pim_catalog_text"},
+    )
+
+    # 2. Attempt to PATCH options
+    response = client.patch(
+        f"/api/rest/v1/attributes/{attribute_code}/options",
+        json=[{"code": "opt1"}],
+    )
+    assert response.status_code == 422
+    assert "does not support options" in response.json()["detail"]
