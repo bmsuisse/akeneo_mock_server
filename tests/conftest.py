@@ -42,10 +42,12 @@ def _start_docker_container() -> tuple[object, str]:
                 "POSTGRES_DB": "akeneo",
                 "POSTGRES_USER": "akeneo",
                 "POSTGRES_PASSWORD": "akeneo",
+                "POSTGRES_INITDB_ARGS": "--nosync",
             },
             ports={"5432/tcp": 54327},
             detach=True,
             auto_remove=True,
+            tmpfs={"/var/lib/postgresql": "size=1g"},
         )
     except DockerException as exc:
         pytest.skip(f"Unable to start Docker container: {exc}")
