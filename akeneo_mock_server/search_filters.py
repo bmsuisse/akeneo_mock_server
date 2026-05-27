@@ -403,6 +403,17 @@ def project_entity_values(
     return projected_entity
 
 
+def _has_post_sql_filters(
+    parsed_filters: dict[str, list[dict[str, Any]]],
+    table_name: str,
+) -> bool:
+    for field, rules in parsed_filters.items():
+        for rule in rules:
+            if _sql_clause_for_rule(table_name, field, rule) is None:
+                return True
+    return False
+
+
 def collect_filtered_items(
     db: Any,  # psycopg.Connection
     table_name: str,
@@ -422,6 +433,10 @@ def collect_filtered_items(
     where_clause = apply_sql_search_filters(table_name, parsed_filters)
     if where_clause:
         query = query.where(where_clause)
+
+    needs_post_sql = _has_post_sql_filters(parsed_filters, table_name)
+    if limit is not None and not needs_post_sql:
+        query = query.limit(limit)
 
     sql = query.sql("postgres")
     rows = db.execute(sql).fetchall()
