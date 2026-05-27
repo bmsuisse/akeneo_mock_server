@@ -601,3 +601,121 @@ def test_reference_entity_records_bulk_patch():
     res = client.get(f"/api/rest/v1/reference-entities/{entity_code}/records/brand-a")
     assert res.status_code == 200
     assert res.json()["values"]["label"] == [{"locale": "en_US", "channel": None, "data": "A"}]
+
+
+def test_asset_family_attribute_options_crud():
+    family_code = "test-asset-family-opts"
+    attribute_code = "size"
+
+    client.patch(f"/api/rest/v1/asset-families/{family_code}", json={"code": family_code})
+    client.patch(
+        f"/api/rest/v1/asset-families/{family_code}/attributes/{attribute_code}",
+        json={"code": attribute_code, "type": "single_option"},
+    )
+
+    list_res = client.get(f"/api/rest/v1/asset-families/{family_code}/attributes/{attribute_code}/options")
+    assert list_res.status_code == 200
+    assert list_res.json() == []
+
+    patch_res = client.patch(
+        f"/api/rest/v1/asset-families/{family_code}/attributes/{attribute_code}/options/small",
+        json={"labels": {"en_US": "S", "fr_FR": "S"}},
+    )
+    assert patch_res.status_code == 201
+
+    patch_res2 = client.patch(
+        f"/api/rest/v1/asset-families/{family_code}/attributes/{attribute_code}/options/large",
+        json={"labels": {"en_US": "L"}},
+    )
+    assert patch_res2.status_code == 201
+
+    list_res2 = client.get(f"/api/rest/v1/asset-families/{family_code}/attributes/{attribute_code}/options")
+    assert list_res2.status_code == 200
+    options = list_res2.json()
+    codes = [o["code"] for o in options]
+    assert "small" in codes
+    assert "large" in codes
+
+    get_res = client.get(f"/api/rest/v1/asset-families/{family_code}/attributes/{attribute_code}/options/small")
+    assert get_res.status_code == 200
+    assert get_res.json()["code"] == "small"
+    assert get_res.json()["labels"] == {"en_US": "S", "fr_FR": "S"}
+
+    update_res = client.patch(
+        f"/api/rest/v1/asset-families/{family_code}/attributes/{attribute_code}/options/small",
+        json={"labels": {"en_US": "Small"}},
+    )
+    assert update_res.status_code == 204
+
+    get_res2 = client.get(f"/api/rest/v1/asset-families/{family_code}/attributes/{attribute_code}/options/small")
+    assert get_res2.status_code == 200
+    assert get_res2.json()["labels"]["en_US"] == "Small"
+
+    not_found = client.get(f"/api/rest/v1/asset-families/{family_code}/attributes/{attribute_code}/options/missing")
+    assert not_found.status_code == 404
+
+
+def test_reference_entity_attribute_options_crud():
+    entity_code = "test-ref-ent-attr-opts"
+    attribute_code = "color"
+
+    client.patch(f"/api/rest/v1/reference-entities/{entity_code}", json={"code": entity_code})
+    client.patch(
+        f"/api/rest/v1/reference-entities/{entity_code}/attributes/{attribute_code}",
+        json={"code": attribute_code, "type": "single_option"},
+    )
+
+    list_res = client.get(f"/api/rest/v1/reference-entities/{entity_code}/attributes/{attribute_code}/options")
+    assert list_res.status_code == 200
+    assert list_res.json() == []
+
+    patch_res = client.patch(
+        f"/api/rest/v1/reference-entities/{entity_code}/attributes/{attribute_code}/options/red",
+        json={"labels": {"en_US": "Red"}},
+    )
+    assert patch_res.status_code == 201
+
+    get_res = client.get(f"/api/rest/v1/reference-entities/{entity_code}/attributes/{attribute_code}/options/red")
+    assert get_res.status_code == 200
+    assert get_res.json()["code"] == "red"
+    assert get_res.json()["labels"] == {"en_US": "Red"}
+
+    update_res = client.patch(
+        f"/api/rest/v1/reference-entities/{entity_code}/attributes/{attribute_code}/options/red",
+        json={"labels": {"fr_FR": "Rouge"}},
+    )
+    assert update_res.status_code == 204
+
+    get_res2 = client.get(f"/api/rest/v1/reference-entities/{entity_code}/attributes/{attribute_code}/options/red")
+    assert get_res2.status_code == 200
+    assert get_res2.json()["labels"]["fr_FR"] == "Rouge"
+
+    not_found = client.get(f"/api/rest/v1/reference-entities/{entity_code}/attributes/{attribute_code}/options/none")
+    assert not_found.status_code == 404
+
+
+def test_asset_family_attribute_options_scoped_by_family():
+    family_a = "family-opts-a"
+    family_b = "family-opts-b"
+    attribute_code = "shared-attr"
+
+    for fam in [family_a, family_b]:
+        client.patch(f"/api/rest/v1/asset-families/{fam}", json={"code": fam})
+        client.patch(
+            f"/api/rest/v1/asset-families/{fam}/attributes/{attribute_code}",
+            json={"code": attribute_code, "type": "single_option"},
+        )
+
+    client.patch(
+        f"/api/rest/v1/asset-families/{family_a}/attributes/{attribute_code}/options/only-in-a",
+        json={"labels": {"en_US": "Only in A"}},
+    )
+
+    list_a = client.get(f"/api/rest/v1/asset-families/{family_a}/attributes/{attribute_code}/options")
+    list_b = client.get(f"/api/rest/v1/asset-families/{family_b}/attributes/{attribute_code}/options")
+
+    codes_a = [o["code"] for o in list_a.json()]
+    codes_b = [o["code"] for o in list_b.json()]
+
+    assert "only-in-a" in codes_a
+    assert "only-in-a" not in codes_b
