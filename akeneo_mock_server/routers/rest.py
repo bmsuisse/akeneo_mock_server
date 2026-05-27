@@ -677,10 +677,10 @@ def _upsert_item(
                 continue
             columns.append(f'"{k}"')
             placeholders.append("%s")
-            if isinstance(v, (dict, list)):
+            col_type = column_types.get(k, "")
+            if isinstance(v, (dict, list)) or col_type in ("jsonb", "json"):
                 values.append(Jsonb(v))
             else:
-                col_type = column_types.get(k, "")
                 values.append(_convert_value_to_type(v, col_type))
 
         update_set = ", ".join([f"{col} = EXCLUDED.{col}" for col in columns if col != '"id"'])
@@ -971,7 +971,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                 _validate_product_values_if_applicable(db, entity_name, validated_data)
                 _upsert_item(db, "products", "identifier", new_identifier, validated_data)
         else:
-            dict_keys_in_patch = {k for k, v in data.items() if isinstance(v, dict)}
+            dict_keys_in_patch = {k for k, v in data.items() if isinstance(v, dict) or v is None}
             if dict_keys_in_patch:
                 existing_cols = _get_table_columns(db, table)
                 cols_to_select = (dict_keys_in_patch & existing_cols) | {"id"}
