@@ -971,7 +971,14 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                 _validate_product_values_if_applicable(db, entity_name, validated_data)
                 _upsert_item(db, "products", "identifier", new_identifier, validated_data)
         else:
-            row = db.execute(f"SELECT * FROM {table} WHERE id = %s", (code,)).fetchone()
+            dict_keys_in_patch = {k for k, v in data.items() if isinstance(v, dict)}
+            if dict_keys_in_patch:
+                existing_cols = _get_table_columns(db, table)
+                cols_to_select = (dict_keys_in_patch & existing_cols) | {"id"}
+                select_cols = ", ".join(f'"{c}"' for c in sorted(cols_to_select))
+                row = db.execute(f"SELECT {select_cols} FROM {table} WHERE id = %s", (code,)).fetchone()
+            else:
+                row = db.execute(f"SELECT id FROM {table} WHERE id = %s", (code,)).fetchone()
             if row is None:
                 data[pk_field] = code
                 validated_data = _validate_complete_payload(data, model)
