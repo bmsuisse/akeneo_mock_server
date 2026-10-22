@@ -143,8 +143,12 @@ def _value_index(values: dict[str, Any]) -> dict[tuple[str, Any, Any], Any]:
 
 
 def values_changes(
-    previous: dict[str, Any] | None, current: dict[str, Any], scope_key: str
+    previous: dict[str, Any] | None,
+    current: dict[str, Any],
+    scope_key: str,
+    attribute_types: dict[str, str] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
+    known_types = attribute_types or {}
     before = _value_index((previous or {}).get("values") or {})
     after = _value_index(current.get("values") or {})
     changes: dict[str, list[dict[str, Any]]] = {}
@@ -157,7 +161,7 @@ def values_changes(
             {
                 "previous": before.get(key),
                 "new": after.get(key),
-                "type": infer_value_type(sample),
+                "type": known_types.get(attribute) or infer_value_type(sample),
                 "locale": locale,
                 scope_key: scope,
             }
@@ -199,7 +203,12 @@ def _set_if(changes: dict[str, Any], key: str, change: Any) -> None:
         changes[key] = change
 
 
-def compute_delta_changes(kind: str, previous: dict[str, Any] | None, current: dict[str, Any]) -> dict[str, Any]:
+def compute_delta_changes(
+    kind: str,
+    previous: dict[str, Any] | None,
+    current: dict[str, Any],
+    attribute_types: dict[str, str] | None = None,
+) -> dict[str, Any]:
     changes: dict[str, Any] = {}
     if kind in ("product", "product-model"):
         if kind == "product":
@@ -208,12 +217,12 @@ def compute_delta_changes(kind: str, previous: dict[str, Any] | None, current: d
             _set_if(changes, "groups", _list_change((previous or {}).get("groups"), current.get("groups")))
         _set_if(changes, "categories", _list_change((previous or {}).get("categories"), current.get("categories")))
         _set_if(changes, "parent", _scalar_change((previous or {}).get("parent"), current.get("parent")))
-        _set_if(changes, "values", values_changes(previous, current, "scope"))
+        _set_if(changes, "values", values_changes(previous, current, "scope", attribute_types))
         _set_if(changes, "associations", _association_changes(previous, current))
     elif kind == "category":
         _set_if(changes, "parent", _scalar_change((previous or {}).get("parent"), current.get("parent")))
         _set_if(changes, "labels", _labels_changes(previous, current))
-        _set_if(changes, "values", values_changes(previous, current, "scope"))
+        _set_if(changes, "values", values_changes(previous, current, "scope", attribute_types))
     elif kind == "attribute-option":
         _set_if(changes, "sort_order", _scalar_change((previous or {}).get("sort_order"), current.get("sort_order")))
         _set_if(changes, "labels", _labels_changes(previous, current))
@@ -230,12 +239,13 @@ def build_event_data(
     resource: dict[str, Any],
     previous: dict[str, Any] | None,
     parent: str | None,
+    attribute_types: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     reference = entity.reference(resource, parent)
     if entity.kind == "product" and not subscription.get("send_product_identifier"):
         reference.pop("identifier", None)
     if event_type.endswith(".updated.delta"):
-        reference["changes"] = compute_delta_changes(entity.kind, previous, resource)
+        reference["changes"] = compute_delta_changes(entity.kind, previous, resource, attribute_types)
         if entity.kind in ("product", "product-model", "reference-entity-record"):
             reference["updated_at"] = {
                 "date": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.000000"),
@@ -306,6 +316,10 @@ def legacy_signature_headers(secret: str, body: bytes) -> dict[str, str]:
     return {"X-Akeneo-Request-Signature": signature, "X-Akeneo-Request-Timestamp": timestamp}
 
 
+HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9-]{1,128}$")
+HEADER_VALUE_RE = re.compile(r"^[\x20-\x7e]{0,256}$")
+
+
 def custom_headers(config: dict[str, Any]) -> dict[str, str]:
     headers = config.get("headers")
     if not isinstance(headers, dict):
@@ -314,6 +328,8 @@ def custom_headers(config: dict[str, Any]) -> dict[str, str]:
         name: value
         for name, value in headers.items()
         if isinstance(value, str)
+        and HEADER_NAME_RE.match(name)
+        and HEADER_VALUE_RE.match(value)
         and name.lower() not in RESERVED_HEADERS
         and not name.upper().startswith("X-AKENEO-SIGNATURE-")
     }
@@ -459,6 +475,18 @@ def validate_subscription(data: dict[str, Any]) -> None:
     validate_filter(data.get("filter"))
 
 
+def resolve_attribute_types(resource: dict[str, Any], previous: dict[str, Any] | None) -> dict[str, str]:
+    codes = set((resource.get("values") or {}).keys()) | set(((previous or {}).get("values") or {}).keys())
+    if not codes:
+        return {}
+    conn = database.get_connection()
+    try:
+        rows = conn.execute("SELECT id, type FROM attributes WHERE id = ANY(%s)", (sorted(codes),)).fetchall()
+    finally:
+        conn.close()
+    return {row["id"]: row["type"] for row in rows if row["type"]}
+
+
 def _record_log(entry: dict[str, Any]) -> None:
     DELIVERY_LOGS[database.db_name_var.get()].append({"log_id": uuid7(), "timestamp": now_iso(), **entry})
 
@@ -569,10 +597,23 @@ async def dispatch_event(
     if entity.kind in LEGACY_KINDS:
         event_types.add(f"{LEGACY_KINDS[entity.kind]}.{LEGACY_ACTIONS[action]}")
 
-    for delivery in find_deliveries(event_types):
+    deliveries = find_deliveries(event_types)
+    attribute_types = (
+        resolve_attribute_types(resource, previous)
+        if entity.delta and any(d.event_type.endswith(".updated.delta") for d in deliveries)
+        else {}
+    )
+    for delivery in deliveries:
         if delivery.event_type.startswith(f"{PLATFORM_PREFIX}."):
             data = build_event_data(
-                entity, action, delivery.event_type, delivery.subscription, resource, copy.deepcopy(previous), parent
+                entity,
+                action,
+                delivery.event_type,
+                delivery.subscription,
+                resource,
+                copy.deepcopy(previous),
+                parent,
+                attribute_types,
             )
             if not _filter_allows(delivery.subscription, filter_facts(delivery.event_type, data, entity)):
                 continue
@@ -581,12 +622,20 @@ async def dispatch_event(
         await _send(delivery, build_legacy_payload(action, entity.kind, resource), False)
 
 
+def _entity_for_event_data(data: dict[str, Any]) -> EventEntity | None:
+    return next((entity for entity in EVENT_ENTITIES.values() if entity.data_key in data), None)
+
+
 async def dispatch_raw_event(event_type: str, data: dict[str, Any]) -> int:
-    deliveries = find_deliveries({event_type})
+    entity = _entity_for_event_data(data)
     sent = 0
-    for delivery in deliveries:
-        if not _filter_allows(delivery.subscription, filter_facts(event_type, data, None)):
+    for delivery in find_deliveries({event_type}):
+        delivered = copy.deepcopy(data)
+        product = delivered.get("product")
+        if isinstance(product, dict) and not delivery.subscription.get("send_product_identifier"):
+            product.pop("identifier", None)
+        if not _filter_allows(delivery.subscription, filter_facts(event_type, data, entity)):
             continue
-        await _send(delivery, wrap_cloudevent(event_type, delivery.subscription, data), True)
+        await _send(delivery, wrap_cloudevent(event_type, delivery.subscription, delivered), True)
         sent += 1
     return sent

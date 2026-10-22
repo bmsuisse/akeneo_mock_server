@@ -76,6 +76,15 @@ If Akeneo releases a new OpenAPI schema, you can automatically ingest it, patch 
 make update-api-docs
 ```
 
+### Event Platform
+The mock implements the Akeneo Event Platform management API (`/api/v1/subscribers`, `/subscriptions`, `/suspend`, `/resume`, `/logs`) and delivers CloudEvents to `https` subscriptions when entities change through the REST API:
+
+- Created / updated / deleted events for products (incl. UUID endpoints), product models, categories, attributes, attribute groups, families, family variants, attribute options, reference entity records and assets.
+- `*.updated.delta` events (product, product-model, category, attribute-option, asset, reference-entity-record) with documented `changes` shapes.
+- HMAC-SHA256 signing (`X-AKENEO-SIGNATURE-PRIMARY/SECONDARY`), custom headers, `send_product_identifier`, and subscription `filter` expressions.
+- Legacy Events API names (`product.created`, `product.removed`, `product_model.*`) with `X-Akeneo-Request-Signature`.
+- Events the mock cannot trigger itself (`became-complete`, `job.*.status-changed`, `workflow.*`, `app.deleted`, ...) can be emitted with `POST /api/v1/mock/events` (`{"type": "...", "data": {...}}`; `data` defaults to the documented sample). `GET /api/v1/mock/events` lists all supported types.
+
 ## Architecture Notes
 
 ### Shared State

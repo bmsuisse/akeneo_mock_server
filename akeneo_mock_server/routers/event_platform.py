@@ -176,7 +176,7 @@ async def patch_subscription(
     data = await safe_json_body(request)
     _validate_subscription_payload(data)
     row = db.execute(
-        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
+        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s FOR UPDATE", (subscriber_id, subscription_id)
     ).fetchone()
     if row is None:
         data["id"] = subscription_id
@@ -217,7 +217,7 @@ def _transition_subscription(
     db: psycopg.Connection, subscriber_id: str, subscription_id: str, required: str, target: str
 ) -> JSONResponse:
     row = db.execute(
-        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
+        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s FOR UPDATE", (subscriber_id, subscription_id)
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Subscription not found")

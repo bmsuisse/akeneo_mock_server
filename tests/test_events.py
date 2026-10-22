@@ -683,7 +683,7 @@ class TestCatalogue:
         assert event["data"]
 
     def test_emit_with_custom_data(self):
-        subscribe(["com.akeneo.pim.v1.product.became-complete"])
+        subscribe(["com.akeneo.pim.v1.product.became-complete"], send_product_identifier=True)
         data = {"product": {"uuid": "u-1", "identifier": "x", "complete_on": [{"locale": "en_US", "scope": "web"}]}}
         with capture_webhooks() as captured:
             client.post(
@@ -959,3 +959,44 @@ class TestDeliveryIsolation:
         finally:
             database.db_name_var.reset(token)
         assert len(client.get("/api/v1/logs").json()["items"]) == 1
+
+
+class TestReviewRegressions:
+    def test_non_ascii_header_is_dropped_and_delivery_continues(self):
+        subscribe(
+            [f"{PRODUCT}.created"],
+            config={"url": WEBHOOK_URL, "headers": {"X-Key": "\u00fc", "X-Good": "ok", "Bad Name": "v"}},
+        )
+        with capture_webhooks() as captured:
+            res = client.post("/api/rest/v1/products", json={"identifier": "hdr-ascii"})
+        assert res.status_code == 201
+        headers = captured.calls[0]["headers"]
+        assert headers["X-Good"] == "ok"
+        assert "X-Key" not in headers and "Bad Name" not in headers
+
+    def test_delta_value_types_come_from_attribute_definitions(self):
+        subscribe([f"{PRODUCT}.updated.delta"])
+        client.post("/api/rest/v1/attributes", json={"code": "is_new", "type": "pim_catalog_boolean"})
+        client.post("/api/rest/v1/products", json={"identifier": "typed"})
+        with capture_webhooks() as captured:
+            client.patch(
+                "/api/rest/v1/products/typed",
+                json={"values": {"is_new": [{"locale": None, "scope": None, "data": True}]}},
+            )
+        entry = captured.payloads[0]["data"]["product"]["changes"]["values"]["is_new"][0]
+        assert entry["type"] == "pim_catalog_boolean"
+
+    def test_emitted_product_event_honours_identifier_flag_per_subscription(self):
+        event_type = "com.akeneo.pim.v1.product.became-complete"
+        subscribe([event_type])
+        with capture_webhooks() as captured:
+            client.post("/api/v1/mock/events", json={"type": event_type})
+        assert "identifier" not in captured.payloads[0]["data"]["product"]
+
+    def test_emitted_delta_is_filterable_by_attribute(self):
+        event_type = f"{PRODUCT}.updated.delta"
+        subscribe([event_type], filter='attribute = "nonexistent_attribute"')
+        with capture_webhooks() as captured:
+            res = client.post("/api/v1/mock/events", json={"type": event_type})
+        assert res.json() == {"delivered": 0}
+        assert captured.calls == []
