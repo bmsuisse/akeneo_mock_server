@@ -1,14 +1,54 @@
-import psycopg
-from psycopg.types.json import Jsonb
 from typing import Any
 
+import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
+from psycopg.types.json import Jsonb
 
 from akeneo_mock_server.common import safe_json_body, safe_loads
 from akeneo_mock_server.database import get_db
+from akeneo_mock_server.events import (
+    EVENT_SAMPLES,
+    PLATFORM_EVENT_TYPES,
+    dispatch_raw_event,
+    get_delivery_logs,
+    now_iso,
+    validate_subscription,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["event-platform"])
+
+REDACTED = "***redacted***"
+
+
+def _validate_subscription_payload(data: dict[str, Any]) -> None:
+    try:
+        validate_subscription(data)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+def present_subscription(data: dict[str, Any]) -> dict[str, Any]:
+    config = data.get("config")
+    if not isinstance(config, dict) or not isinstance(config.get("headers"), dict):
+        return data
+    redacted_headers = {name: REDACTED for name in config["headers"]}
+    return {**data, "config": {**config, "headers": redacted_headers}}
+
+
+def with_subscription_defaults(data: dict[str, Any], subscriber_id: str) -> dict[str, Any]:
+    timestamp = now_iso()
+    return {
+        "source": "pim",
+        "type": "https",
+        "status": "active",
+        "send_product_identifier": False,
+        "createdAt": timestamp,
+        "updatedAt": timestamp,
+        "status_changed_at": timestamp,
+        **data,
+        "subscriber_id": subscriber_id,
+    }
 
 
 @router.get("/subscribers")
@@ -71,7 +111,7 @@ def delete_subscriber(subscriber_id: str, db: psycopg.Connection = Depends(get_d
 @router.get("/subscribers/{subscriber_id}/subscriptions")
 def get_subscriptions(subscriber_id: str, db: psycopg.Connection = Depends(get_db)) -> dict[str, list[dict[str, Any]]]:
     rows = db.execute("SELECT * FROM subscriptions WHERE parent_id = %s", (subscriber_id,)).fetchall()
-    return {"items": [safe_loads(row["data"]) for row in rows]}
+    return {"items": [present_subscription(safe_loads(row["data"])) for row in rows]}
 
 
 @router.get("/subscribers/{subscriber_id}/subscriptions/{subscription_id}")
@@ -83,7 +123,7 @@ def get_subscription(
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Subscription not found")
-    return safe_loads(row["data"])
+    return present_subscription(safe_loads(row["data"]))
 
 
 @router.post(
@@ -94,6 +134,7 @@ async def create_subscription(
     subscriber_id: str, request: Request, db: psycopg.Connection = Depends(get_db)
 ) -> JSONResponse:
     data = await safe_json_body(request)
+    _validate_subscription_payload(data)
     subscription_id = data.get("id")
     if not isinstance(subscription_id, str) or not subscription_id:
         raise HTTPException(status_code=422, detail="Missing 'id' field in payload")
@@ -106,7 +147,12 @@ async def create_subscription(
 
     db.execute(
         "INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s)",
-        (f"{subscriber_id}/{subscription_id}", subscription_id, subscriber_id, Jsonb(data)),
+        (
+            f"{subscriber_id}/{subscription_id}",
+            subscription_id,
+            subscriber_id,
+            Jsonb(with_subscription_defaults(data, subscriber_id)),
+        ),
     )
     db.commit()
 
@@ -128,8 +174,9 @@ async def patch_subscription(
     db: psycopg.Connection = Depends(get_db),
 ) -> Response:
     data = await safe_json_body(request)
+    _validate_subscription_payload(data)
     row = db.execute(
-        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
+        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s FOR UPDATE", (subscriber_id, subscription_id)
     ).fetchone()
     if row is None:
         data["id"] = subscription_id
@@ -140,6 +187,7 @@ async def patch_subscription(
     else:
         existing = safe_loads(row["data"])
         existing.update(data)
+        existing["updatedAt"] = now_iso()
         db.execute(
             "UPDATE subscriptions SET data = %s WHERE pk = %s", (Jsonb(existing), f"{subscriber_id}/{subscription_id}")
         )
@@ -163,3 +211,70 @@ def delete_subscription(
     db.execute("DELETE FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id))
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _transition_subscription(
+    db: psycopg.Connection, subscriber_id: str, subscription_id: str, required: str, target: str
+) -> JSONResponse:
+    row = db.execute(
+        "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s FOR UPDATE", (subscriber_id, subscription_id)
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    data = safe_loads(row["data"])
+    if data.get("status", "active") != required:
+        raise HTTPException(status_code=409, detail=f"Subscription is not {required}")
+    timestamp = now_iso()
+    data.update({"status": target, "updatedAt": timestamp, "status_changed_at": timestamp})
+    db.execute("UPDATE subscriptions SET data = %s WHERE pk = %s", (Jsonb(data), f"{subscriber_id}/{subscription_id}"))
+    db.commit()
+    return JSONResponse(content=present_subscription(data), status_code=status.HTTP_202_ACCEPTED)
+
+
+@router.post("/subscribers/{subscriber_id}/subscriptions/{subscription_id}/suspend")
+def suspend_subscription(
+    subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)
+) -> JSONResponse:
+    return _transition_subscription(db, subscriber_id, subscription_id, "active", "suspended")
+
+
+@router.post("/subscribers/{subscriber_id}/subscriptions/{subscription_id}/resume")
+def resume_subscription(
+    subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)
+) -> JSONResponse:
+    return _transition_subscription(db, subscriber_id, subscription_id, "suspended", "active")
+
+
+@router.get("/logs")
+def get_logs(
+    subscriber_id: str | None = None,
+    subscription_id: str | None = None,
+    log_type: str | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    items = [
+        log
+        for log in get_delivery_logs()
+        if (subscriber_id is None or log.get("subscriber_id") == subscriber_id)
+        and (subscription_id is None or log.get("subscription_id") == subscription_id)
+        and (log_type is None or log.get("log_type") == log_type)
+    ]
+    return {"items": items}
+
+
+@router.get("/mock/events")
+def list_mock_events() -> dict[str, list[str]]:
+    return {"items": PLATFORM_EVENT_TYPES}
+
+
+@router.post("/mock/events")
+async def emit_mock_event(request: Request) -> dict[str, int]:
+    body = await safe_json_body(request)
+    event_type = body.get("type")
+    if event_type not in EVENT_SAMPLES:
+        raise HTTPException(status_code=422, detail=f"Unknown event type: {event_type}")
+    data = body.get("data")
+    if data is None:
+        data = EVENT_SAMPLES[event_type]
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=422, detail="'data' must be an object")
+    return {"delivered": await dispatch_raw_event(event_type, data)}

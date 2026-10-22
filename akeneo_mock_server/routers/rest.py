@@ -1,3 +1,4 @@
+import copy
 import json
 import re
 from datetime import datetime
@@ -17,7 +18,7 @@ from akeneo_mock_server.common import (
     apply_patch,
     safe_json_body,
 )
-from akeneo_mock_server.events import dispatch_event, get_entity_event_name
+from akeneo_mock_server.events import EVENT_ENTITIES, dispatch_event
 from akeneo_mock_server.database import MODELS, SUB_MODELS, ThreeLevelAttributeOptionModel, get_db
 from akeneo_mock_server.pagination import (
     build_href,
@@ -898,8 +899,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
             _upsert_item(db, table, pk_field, code, data)
             db.commit()
 
-        event_name = get_entity_event_name(entity_name, "created")
-        background_tasks.add_task(dispatch_event, event_name, data)
+        background_tasks.add_task(dispatch_event, entity_name, "created", data)
 
         from urllib.parse import quote
 
@@ -914,6 +914,8 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
         db: psycopg.Connection = Depends(get_db),
     ) -> Response:
         data = _validate_payload(await safe_json_body(request), model, partial=True)
+        previous_data: dict[str, Any] | None = None
+        event_resource: dict[str, Any] = data
 
         if entity_name == "products":
             row = db.execute(f"SELECT * FROM {table} WHERE id = %s", (code,)).fetchone()
@@ -927,8 +929,10 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                 validated_data = _validate_complete_payload(data, model)
                 _validate_product_values_if_applicable(db, entity_name, validated_data)
                 _upsert_item(db, table, pk_field, code, validated_data)
+                event_resource = validated_data
             else:
                 existing_data = _get_item_data_dict(row)
+                previous_data = copy.deepcopy(existing_data)
                 patched_data = apply_patch(existing_data, data)
                 patched_data["identifier"] = code
                 product_uuid = _ensure_product_uuid(patched_data.get("uuid"), db)
@@ -939,6 +943,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                 validated_data = _validate_complete_payload(patched_data, model)
                 _validate_product_values_if_applicable(db, entity_name, validated_data)
                 _upsert_item(db, table, pk_field, code, validated_data)
+                event_resource = validated_data
         elif entity_name == "products-uuid":
             row = _find_product_by_uuid(db, code)
             if row is None:
@@ -952,8 +957,10 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                 validated_data = _validate_complete_payload(data, model)
                 _validate_product_values_if_applicable(db, entity_name, validated_data)
                 _upsert_item(db, "products", "identifier", identifier, validated_data)
+                event_resource = validated_data
             else:
                 existing_data = _get_item_data_dict(row)
+                previous_data = copy.deepcopy(existing_data)
                 patched_data = apply_patch(existing_data, data)
                 patched_data["uuid"] = code
                 new_identifier = patched_data.get("identifier")
@@ -972,9 +979,12 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                 validated_data = _validate_complete_payload(patched_data, model)
                 _validate_product_values_if_applicable(db, entity_name, validated_data)
                 _upsert_item(db, "products", "identifier", new_identifier, validated_data)
+                event_resource = validated_data
         else:
             dict_keys_in_patch = {k for k, v in data.items() if isinstance(v, dict) or v is None}
-            if dict_keys_in_patch:
+            if entity_name in EVENT_ENTITIES:
+                row = db.execute(f"SELECT * FROM {table} WHERE id = %s", (code,)).fetchone()
+            elif dict_keys_in_patch:
                 existing_cols = _get_table_columns(db, table)
                 cols_to_select = (dict_keys_in_patch & existing_cols) | {"id"}
                 select_cols = ", ".join(f'"{c}"' for c in sorted(cols_to_select))
@@ -986,17 +996,20 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                 validated_data = _validate_complete_payload(data, model)
                 _validate_product_values_if_applicable(db, entity_name, validated_data)
                 _upsert_item(db, table, pk_field, code, validated_data)
+                event_resource = validated_data
             else:
                 existing_data = _get_item_data_dict(row)
+                previous_data = copy.deepcopy(existing_data)
                 patched_data = apply_patch(existing_data, data)
                 patched_data[pk_field] = code
                 validated_data = _validate_complete_payload(patched_data, model)
                 _validate_product_values_if_applicable(db, entity_name, validated_data)
                 _upsert_item(db, table, pk_field, code, validated_data)
+                event_resource = validated_data
 
         db.commit()
-        event_name = get_entity_event_name(entity_name, "updated")
-        background_tasks.add_task(dispatch_event, event_name, data)
+        event_action = "created" if previous_data is None else "updated"
+        background_tasks.add_task(dispatch_event, entity_name, event_action, event_resource, previous_data)
         from urllib.parse import quote
 
         headers = {"Location": f"/api/rest/v1/{entity_name}/{quote(code)}", "Content-Type": "application/json"}
@@ -1016,14 +1029,18 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
             raise HTTPException(status_code=404, detail=f"{entity_name} '{code}' not found.")
 
         deleted_data = _get_item_data_dict(row)
+        if entity_name in ("products", "products-uuid"):
+            deleted_data.setdefault("identifier", row["id"])
+            deleted_data.setdefault("uuid", row["uuid"])
+        else:
+            deleted_data.setdefault(pk_field, code)
         if entity_name == "products-uuid":
             db.execute("DELETE FROM products WHERE uuid = %s", (code,))
         else:
             db.execute(f"DELETE FROM {table} WHERE id = %s", (code,))
         db.commit()
 
-        event_name = get_entity_event_name(entity_name, "deleted")
-        background_tasks.add_task(dispatch_event, event_name, deleted_data)
+        background_tasks.add_task(dispatch_event, entity_name, "deleted", deleted_data)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @router.patch(base_path, status_code=status.HTTP_200_OK)
@@ -1058,16 +1075,17 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                     data["uuid"] = product_uuid
                     _upsert_item(db, "products", "identifier", code, data)
                     responses.append({"line": index + 1, pk_field: code, "status_code": 201})
-                    background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "created"), data)
+                    background_tasks.add_task(dispatch_event, entity_name, "created", data)
                     continue
                 existing_data = _get_item_data_dict(row)
+                previous_data = copy.deepcopy(existing_data)
                 existing_data = apply_patch(existing_data, data)
                 existing_data["identifier"] = code
                 product_uuid = _ensure_product_uuid(existing_data.get("uuid"), db)
                 existing_data["uuid"] = product_uuid
                 _upsert_item(db, "products", "identifier", code, existing_data)
                 responses.append({"line": index + 1, pk_field: code, "status_code": 204})
-                background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "updated"), existing_data)
+                background_tasks.add_task(dispatch_event, entity_name, "updated", existing_data, previous_data)
             elif entity_name == "products-uuid":
                 row = _find_product_by_uuid(db, code)
                 if row is None:
@@ -1078,14 +1096,15 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                     data["uuid"] = code
                     _upsert_item(db, "products", "identifier", identifier, data)
                     responses.append({"line": index + 1, pk_field: code, "status_code": 201})
-                    background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "created"), data)
+                    background_tasks.add_task(dispatch_event, entity_name, "created", data)
                     continue
                 existing_data = _get_item_data_dict(row)
+                previous_data = copy.deepcopy(existing_data)
                 existing_data = apply_patch(existing_data, data)
                 existing_data["uuid"] = code
                 _upsert_item(db, "products", "identifier", existing_data.get("identifier", ""), existing_data)
                 responses.append({"line": index + 1, pk_field: code, "status_code": 204})
-                background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "updated"), existing_data)
+                background_tasks.add_task(dispatch_event, entity_name, "updated", existing_data, previous_data)
             else:
                 row = db.execute(f"SELECT * FROM {table} WHERE id = %s", (code,)).fetchone()
                 try:
@@ -1093,16 +1112,15 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                         _validate_product_values_if_applicable(db, entity_name, data)
                         _upsert_item(db, table, pk_field, code, data)
                         responses.append({"line": index + 1, pk_field: code, "status_code": 201})
-                        background_tasks.add_task(dispatch_event, get_entity_event_name(entity_name, "created"), data)
+                        background_tasks.add_task(dispatch_event, entity_name, "created", data)
                     else:
                         existing_data = _get_item_data_dict(row)
+                        previous_data = copy.deepcopy(existing_data)
                         existing_data = apply_patch(existing_data, data)
                         _validate_product_values_if_applicable(db, entity_name, existing_data)
                         _upsert_item(db, table, pk_field, code, existing_data)
                         responses.append({"line": index + 1, pk_field: code, "status_code": 204})
-                        background_tasks.add_task(
-                            dispatch_event, get_entity_event_name(entity_name, "updated"), existing_data
-                        )
+                        background_tasks.add_task(dispatch_event, entity_name, "updated", existing_data, previous_data)
                 except HTTPException as e:
                     responses.append(
                         {"line": index + 1, pk_field: code, "status_code": e.status_code, "message": str(e.detail)}
@@ -1237,7 +1255,10 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
 
     @router.post(base_path, status_code=201)
     async def create_sub_item(
-        parent_code: str, request: Request, db: psycopg.Connection = Depends(get_db)
+        parent_code: str,
+        request: Request,
+        background_tasks: BackgroundTasks,
+        db: psycopg.Connection = Depends(get_db),
     ) -> JSONResponse:
         if is_attribute_options_sub_entity:
             _validate_attribute_option_parent_type(db, parent_code)
@@ -1251,6 +1272,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         validated_data = _validate_complete_payload(data, model)
         _upsert_item(db, table, pk_field, code, validated_data, parent_code)
         db.commit()
+        background_tasks.add_task(dispatch_event, sub_entity_key, "created", validated_data, None, parent_code)
         from urllib.parse import quote
 
         return JSONResponse(
@@ -1263,6 +1285,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
     async def patch_multiple_sub_items(
         parent_code: str,
         request: Request,
+        background_tasks: BackgroundTasks,
         db: psycopg.Connection = Depends(get_db),
     ) -> Response:
         if is_attribute_options_sub_entity:
@@ -1300,9 +1323,13 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
                 validated_payload = _validate_complete_payload(payload, model)
                 _upsert_item(db, table, pk_field, code, validated_payload, parent_code)
                 responses.append({"line": index + 1, pk_field: code, "status_code": 201})
+                background_tasks.add_task(
+                    dispatch_event, sub_entity_key, "created", validated_payload, None, parent_code
+                )
                 continue
 
             existing_data = _get_item_data_dict(row)
+            previous_data = copy.deepcopy(existing_data)
             existing_data = apply_patch(existing_data, data)
             existing_data[pk_field] = code
             existing_data["parent_id"] = parent_code
@@ -1317,6 +1344,9 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
             validated_payload = _validate_complete_payload(existing_data, model)
             _upsert_item(db, table, pk_field, code, validated_payload, parent_code)
             responses.append({"line": index + 1, pk_field: code, "status_code": 204})
+            background_tasks.add_task(
+                dispatch_event, sub_entity_key, "updated", validated_payload, previous_data, parent_code
+            )
 
         db.commit()
         media_type = (
@@ -1331,14 +1361,20 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
 
     @router.patch(f"{base_path}/{{code}}", status_code=204)
     async def patch_sub_item(
-        parent_code: str, code: str, request: Request, db: psycopg.Connection = Depends(get_db)
+        parent_code: str,
+        code: str,
+        request: Request,
+        background_tasks: BackgroundTasks,
+        db: psycopg.Connection = Depends(get_db),
     ) -> Response:
         if is_attribute_options_sub_entity:
             _validate_attribute_option_parent_type(db, parent_code)
         data = await safe_json_body(request)
         row = db.execute(f"SELECT * FROM {table} WHERE parent_id = %s AND id = %s", (parent_code, code)).fetchone()
+        previous_data: dict[str, Any] | None = None
         if row:
             existing = _get_item_data_dict(row)
+            previous_data = copy.deepcopy(existing)
             data = apply_patch(existing, data)
         data[pk_field] = code
         data["parent_id"] = parent_code
@@ -1347,6 +1383,10 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         validated_data = _validate_complete_payload(data, model)
         _upsert_item(db, table, pk_field, code, validated_data, parent_code)
         db.commit()
+        event_action = "created" if previous_data is None else "updated"
+        background_tasks.add_task(
+            dispatch_event, sub_entity_key, event_action, validated_data, previous_data, parent_code
+        )
         return Response(status_code=204)
 
 
