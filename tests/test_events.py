@@ -1,11 +1,17 @@
 import hashlib
 import hmac
 import json
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any
 from unittest.mock import MagicMock, patch
 
+import httpx
+import pytest
+
+from akeneo_mock_server.events import DELIVERY_LOGS
 from fastapi.testclient import TestClient
+
 from akeneo_mock_server.app import app
 
 client = TestClient(app)
@@ -31,7 +37,7 @@ def _create_subscription(
     events: list | None = None,
 ) -> dict:
     if events is None:
-        events = ["akeneo.pim.v1.product.created"]
+        events = ["com.akeneo.pim.v1.product.created"]
     payload = {
         "id": sub_scription_id,
         "destination": {"type": "https", "url": WEBHOOK_URL},
@@ -114,7 +120,7 @@ class TestSubscriptions:
             json={
                 "id": "hook-1",
                 "destination": {"type": "https", "url": WEBHOOK_URL},
-                "events": ["akeneo.pim.v1.product.created"],
+                "events": ["com.akeneo.pim.v1.product.created"],
             },
         )
         assert res.status_code == 201
@@ -125,13 +131,13 @@ class TestSubscriptions:
         _create_subscription()
         res = client.get("/api/v1/subscribers/sub-1/subscriptions/hook-1")
         assert res.status_code == 200
-        assert "akeneo.pim.v1.product.created" in res.json()["events"]
+        assert "com.akeneo.pim.v1.product.created" in res.json()["events"]
 
     def test_list_subscriptions(self):
         """GET /subscribers/{id}/subscriptions lists all subscriptions."""
         _create_subscriber()
         _create_subscription(sub_scription_id="h1")
-        _create_subscription(sub_scription_id="h2", events=["akeneo.pim.v1.product.updated"])
+        _create_subscription(sub_scription_id="h2", events=["com.akeneo.pim.v1.product.updated"])
         res = client.get("/api/v1/subscribers/sub-1/subscriptions")
         assert res.status_code == 200
         assert len(res.json()["items"]) == 2
@@ -142,10 +148,10 @@ class TestSubscriptions:
         _create_subscription()
         client.patch(
             "/api/v1/subscribers/sub-1/subscriptions/hook-1",
-            json={"events": ["akeneo.pim.v1.product.deleted"]},
+            json={"events": ["com.akeneo.pim.v1.product.deleted"]},
         )
         res = client.get("/api/v1/subscribers/sub-1/subscriptions/hook-1")
-        assert "akeneo.pim.v1.product.deleted" in res.json()["events"]
+        assert "com.akeneo.pim.v1.product.deleted" in res.json()["events"]
 
     def test_delete_subscription(self):
         """DELETE /subscribers/{id}/subscriptions/{sub_id} removes a subscription."""
@@ -160,6 +166,11 @@ class TestSubscriptions:
 # ---------------------------------------------------------------------------
 # Event dispatch (webhook firing)
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def clear_delivery_logs():
+    DELIVERY_LOGS.clear()
 
 
 PRODUCT = "com.akeneo.pim.v1.product"
@@ -308,12 +319,13 @@ class TestDeltaEvents:
         assert len(captured.payloads) == 2
         first, second = captured.payloads
         assert first["type"] == f"{PRODUCT}.updated.delta"
-        assert first["data"]["changes"] == [
-            {"attribute": "name", "locale": "en_US", "scope": None, "previous": None, "new": "Old"}
-        ]
-        assert second["data"]["changes"] == [
-            {"attribute": "name", "locale": "en_US", "scope": None, "previous": "Old", "new": "New"}
-        ]
+        assert first["data"]["product"]["changes"]["values"] == {
+            "name": [{"previous": None, "new": "Old", "type": "text", "locale": "en_US", "scope": None}]
+        }
+        assert second["data"]["product"]["changes"]["values"] == {
+            "name": [{"previous": "Old", "new": "New", "type": "text", "locale": "en_US", "scope": None}]
+        }
+        assert first["data"]["product"]["updated_at"]["timezone"] == "UTC"
 
     def test_delta_not_sent_to_plain_updated_subscription(self):
         subscribe([f"{PRODUCT}.updated"])
@@ -321,7 +333,7 @@ class TestDeltaEvents:
         with capture_webhooks() as captured:
             client.patch("/api/rest/v1/products/d2", json={"values": self._price_values("x")})
         assert [e["type"] for e in captured.payloads] == [f"{PRODUCT}.updated"]
-        assert "changes" not in captured.payloads[0]["data"]
+        assert "changes" not in captured.payloads[0]["data"]["product"]
 
     def test_both_updated_and_delta_subscribed_get_two_events(self):
         subscribe([f"{PRODUCT}.updated", f"{PRODUCT}.updated.delta"])
@@ -360,7 +372,9 @@ class TestProductModelEvents:
                 "/api/rest/v1/product-models/pm-2",
                 json={"values": {"name": [{"locale": None, "scope": None, "data": "n"}]}},
             )
-        assert captured.payloads[0]["data"]["changes"][0]["new"] == "n"
+        changes = captured.payloads[0]["data"]["product_model"]["changes"]
+        assert changes["values"]["name"][0]["new"] == "n"
+        assert "enabled" not in changes and "family" not in changes
 
 
 class TestSubscriptionRouting:
@@ -623,3 +637,325 @@ class TestLogs:
             client.post("/api/rest/v1/products", json={"identifier": "failing"})
         items = client.get("/api/v1/logs", params={"subscription_id": "hook-1", "log_type": "error"}).json()["items"]
         assert items[-1]["status_code"] == 500
+
+
+class TestCatalogue:
+    def test_all_documented_event_types_are_listed(self):
+        items = client.get("/api/v1/mock/events").json()["items"]
+        assert len(items) >= 53
+        for expected in (
+            "com.akeneo.pim.v1.product.became-complete",
+            "com.akeneo.pim.v1.job.import.status-changed",
+            "com.akeneo.pim.v1.workflow.task.created",
+            "com.akeneo.pim.v1.reference-entity-record.updated.delta",
+            "com.akeneo.pim.v1.app.deleted",
+        ):
+            assert expected in items
+
+    def test_unknown_event_type_is_rejected(self):
+        _create_subscriber()
+        res = client.post(
+            "/api/v1/subscribers/sub-1/subscriptions",
+            json={"id": "bad", "events": ["com.akeneo.pim.v1.nonsense.created"]},
+        )
+        assert res.status_code == 422
+
+    def test_invalid_filter_is_rejected_on_create_and_patch(self):
+        subscribe([f"{PRODUCT}.created"])
+        res = client.post(
+            "/api/v1/subscribers/sub-1/subscriptions",
+            json={"id": "bad", "events": [f"{PRODUCT}.created"], "filter": 'user_type = "api'},
+        )
+        assert res.status_code == 422
+        res = client.patch("/api/v1/subscribers/sub-1/subscriptions/hook-1", json={"filter": "user_type ~ api"})
+        assert res.status_code == 422
+
+    @pytest.mark.parametrize("event_type", sorted(__import__("akeneo_mock_server.events").events.EVENT_SAMPLES))
+    def test_every_event_can_be_emitted_with_its_documented_sample(self, event_type: str):
+        subscribe([event_type])
+        with capture_webhooks() as captured:
+            res = client.post("/api/v1/mock/events", json={"type": event_type})
+        assert res.status_code == 200
+        assert res.json() == {"delivered": 1}
+        event = captured.payloads[0]
+        assert event["type"] == event_type
+        assert event["specversion"] == "1.0"
+        assert event["data"]
+
+    def test_emit_with_custom_data(self):
+        subscribe(["com.akeneo.pim.v1.product.became-complete"])
+        data = {"product": {"uuid": "u-1", "identifier": "x", "complete_on": [{"locale": "en_US", "scope": "web"}]}}
+        with capture_webhooks() as captured:
+            client.post(
+                "/api/v1/mock/events", json={"type": "com.akeneo.pim.v1.product.became-complete", "data": data}
+            )
+        assert captured.payloads[0]["data"] == data
+
+    def test_emit_unknown_type_is_422(self):
+        res = client.post("/api/v1/mock/events", json={"type": "nope"})
+        assert res.status_code == 422
+
+    def test_emit_without_subscription_delivers_nothing(self):
+        res = client.post("/api/v1/mock/events", json={"type": "com.akeneo.pim.v1.app.deleted"})
+        assert res.json() == {"delivered": 0}
+
+
+class TestOtherEntityEvents:
+    def _events(self, kind: str, *suffixes: str) -> list[str]:
+        return [f"com.akeneo.pim.v1.{kind}.{suffix}" for suffix in suffixes]
+
+    @pytest.mark.parametrize(
+        ("path", "kind", "data_key"),
+        [
+            ("categories", "category", "category"),
+            ("attributes", "attribute", "attribute"),
+            ("attribute-groups", "attribute-group", "attribute_group"),
+            ("families", "family", "family"),
+        ],
+    )
+    def test_top_level_entity_lifecycle(self, path: str, kind: str, data_key: str):
+        subscribe(self._events(kind, "created", "updated", "deleted"))
+        body = {"code": "e-1", "type": "pim_catalog_text"} if kind == "attribute" else {"code": "e-1"}
+        with capture_webhooks() as captured:
+            assert client.post(f"/api/rest/v1/{path}", json=body).status_code == 201
+            assert client.patch(f"/api/rest/v1/{path}/e-1", json={"labels": {"en_US": "One"}}).status_code == 204
+            assert client.delete(f"/api/rest/v1/{path}/e-1").status_code == 204
+        assert [e["type"] for e in captured.payloads] == self._events(kind, "created", "updated", "deleted")
+        assert all(e["data"][data_key] == {"code": "e-1"} for e in captured.payloads)
+        assert all(e["data"]["author"]["type"] == "api" for e in captured.payloads)
+
+    def test_category_delta_has_labels_and_parent(self):
+        subscribe(self._events("category", "updated.delta"))
+        client.post("/api/rest/v1/categories", json={"code": "root"})
+        client.post("/api/rest/v1/categories", json={"code": "child", "labels": {"en_US": "Old"}})
+        with capture_webhooks() as captured:
+            client.patch("/api/rest/v1/categories/child", json={"parent": "root", "labels": {"en_US": "New"}})
+        changes = captured.payloads[0]["data"]["category"]["changes"]
+        assert changes["parent"] == {"previous": None, "new": "root"}
+        assert changes["labels"] == {"en_US": {"previous": "Old", "new": "New"}}
+
+    def test_attribute_option_events_reference_parent_attribute(self):
+        subscribe(self._events("attribute-option", "created", "updated", "updated.delta"))
+        client.post("/api/rest/v1/attributes", json={"code": "color", "type": "pim_catalog_simpleselect"})
+        with capture_webhooks() as captured:
+            client.post("/api/rest/v1/attributes/color/options", json={"code": "red", "sort_order": 1})
+            client.patch("/api/rest/v1/attributes/color/options/red", json={"sort_order": 5})
+        created, updated, delta = captured.payloads
+        assert created["type"].endswith("attribute-option.created")
+        assert created["data"]["attribute_option"] == {"code": "red", "attribute": {"code": "color"}}
+        assert updated["type"].endswith("attribute-option.updated")
+        assert delta["data"]["attribute_option"]["changes"]["sort_order"] == {"previous": 1, "new": 5}
+
+    def test_attribute_option_bulk_patch_emits_events(self):
+        subscribe(self._events("attribute-option", "created", "updated"))
+        client.post("/api/rest/v1/attributes", json={"code": "size", "type": "pim_catalog_simpleselect"})
+        with capture_webhooks() as captured:
+            client.patch(
+                "/api/rest/v1/attributes/size/options",
+                content='{"code":"s"}\n{"code":"m"}\n',
+                headers={"content-type": "application/vnd.akeneo.collection+json"},
+            )
+            client.patch(
+                "/api/rest/v1/attributes/size/options",
+                content='{"code":"s","sort_order":3}\n',
+                headers={"content-type": "application/vnd.akeneo.collection+json"},
+            )
+        assert [e["type"].rsplit(".", 1)[1] for e in captured.payloads] == ["created", "created", "updated"]
+
+    def test_family_variant_events_reference_family(self):
+        subscribe(self._events("family-variant", "created", "updated"))
+        for code in ("fa-axis", "fa-other"):
+            client.post("/api/rest/v1/attributes", json={"code": code, "type": "pim_catalog_simpleselect"})
+        client.post(
+            "/api/rest/v1/families",
+            json={"code": "shirts", "attributes": ["fa-axis", "fa-other"], "attribute_as_label": "fa-axis"},
+        )
+        variant = {"code": "by-axis", "variant_attribute_sets": [{"level": 1, "axes": ["fa-axis"], "attributes": []}]}
+        with capture_webhooks() as captured:
+            assert client.post("/api/rest/v1/families/shirts/variants", json=variant).status_code == 201
+            client.patch("/api/rest/v1/families/shirts/variants/by-axis", json={"labels": {"en_US": "Axis"}})
+        assert [e["type"].rsplit(".", 1)[1] for e in captured.payloads] == ["created", "updated"]
+        assert captured.payloads[0]["data"]["family_variant"] == {"code": "by-axis", "family": {"code": "shirts"}}
+
+    def test_reference_entity_record_delta_uses_channel(self):
+        subscribe(self._events("reference-entity-record", "created", "updated.delta"))
+        client.post("/api/rest/v1/reference-entities", json={"code": "brand"})
+        values = {"label": [{"locale": "en_US", "channel": None, "data": "Acme"}]}
+        with capture_webhooks() as captured:
+            client.patch("/api/rest/v1/reference-entities/brand/records/acme", json={"code": "acme"})
+            client.patch("/api/rest/v1/reference-entities/brand/records/acme", json={"values": values})
+        created, delta = captured.payloads
+        assert created["data"]["reference_entity_record"] == {"code": "acme", "reference_entity": {"code": "brand"}}
+        record = delta["data"]["reference_entity_record"]
+        assert record["changes"]["values"]["label"] == [
+            {"previous": None, "new": "Acme", "type": "text", "locale": "en_US", "channel": None}
+        ]
+        assert record["updated_at"]["timezone"] == "UTC"
+
+    def test_asset_events_reference_asset_family(self):
+        subscribe(self._events("asset", "created", "updated.delta"))
+        client.patch("/api/rest/v1/asset-families/packshots", json={"code": "packshots"})
+        values = {"alt": [{"locale": None, "channel": "web", "data": "text"}]}
+        with capture_webhooks() as captured:
+            client.patch("/api/rest/v1/asset-families/packshots/assets/a1", json={"code": "a1"})
+            client.patch("/api/rest/v1/asset-families/packshots/assets/a1", json={"values": values})
+        created, delta = captured.payloads
+        assert created["data"]["asset"] == {"code": "a1", "asset_family": {"code": "packshots"}}
+        assert delta["data"]["asset"]["changes"]["values"]["alt"][0]["channel"] == "web"
+
+    def test_entities_without_platform_events_do_not_fire(self):
+        subscribe(self._events("category", "created"))
+        with capture_webhooks() as captured:
+            client.post("/api/rest/v1/channels", json={"code": "web"})
+            client.post("/api/rest/v1/association-types", json={"code": "UPSELL"})
+        assert captured.calls == []
+
+
+class TestProductDeltaDetails:
+    def test_property_relationship_and_association_changes(self):
+        subscribe([f"{PRODUCT}.updated.delta"])
+        client.post(
+            "/api/rest/v1/products",
+            json={
+                "identifier": "pd-1",
+                "enabled": True,
+                "family": "old-fam",
+                "categories": ["c1", "c2"],
+                "groups": ["g1"],
+                "associations": {"UPSELL": {"products": ["p1"], "product_models": [], "groups": []}},
+            },
+        )
+        with capture_webhooks() as captured:
+            client.patch(
+                "/api/rest/v1/products/pd-1",
+                json={
+                    "enabled": False,
+                    "family": "new-fam",
+                    "categories": ["c2", "c3"],
+                    "groups": [],
+                    "associations": {"UPSELL": {"products": ["p2"], "product_models": [], "groups": []}},
+                },
+            )
+        changes = captured.payloads[0]["data"]["product"]["changes"]
+        assert changes["enabled"] == {"previous": True, "new": False}
+        assert changes["family"] == {"previous": "old-fam", "new": "new-fam"}
+        assert changes["categories"] == {"added": ["c3"], "removed": ["c1"]}
+        assert changes["groups"] == {"added": [], "removed": ["g1"]}
+        assert changes["associations"]["UPSELL"] == {
+            "added": {"products": ["p2"]},
+            "removed": {"products": ["p1"]},
+        }
+
+    def test_unchanged_properties_are_omitted(self):
+        subscribe([f"{PRODUCT}.updated.delta"])
+        client.post("/api/rest/v1/products", json={"identifier": "pd-2", "enabled": True, "family": "f"})
+        with capture_webhooks() as captured:
+            client.patch("/api/rest/v1/products/pd-2", json={"enabled": True})
+        assert captured.payloads[0]["data"]["product"]["changes"] == {}
+
+    def test_removed_value_has_null_new(self):
+        subscribe([f"{PRODUCT}.updated.delta"])
+        values = {"name": [{"locale": "en_US", "scope": None, "data": "x"}]}
+        client.post("/api/rest/v1/products", json={"identifier": "pd-3", "values": values})
+        with capture_webhooks() as captured:
+            client.patch("/api/rest/v1/products/pd-3", json={"values": {"name": None}})
+        entry = captured.payloads[0]["data"]["product"]["changes"]["values"]["name"][0]
+        assert entry["previous"] == "x"
+        assert entry["new"] is None
+
+    def test_value_types_are_inferred(self):
+        subscribe([f"{PRODUCT}.updated.delta"])
+        client.post("/api/rest/v1/products", json={"identifier": "pd-4"})
+        values = {
+            "flag": [{"locale": None, "scope": None, "data": True}],
+            "count": [{"locale": None, "scope": None, "data": 3}],
+            "tags": [{"locale": None, "scope": None, "data": ["a"]}],
+            "cost": [{"locale": None, "scope": None, "data": [{"amount": "1", "currency": "EUR"}]}],
+        }
+        with capture_webhooks() as captured:
+            client.patch("/api/rest/v1/products/pd-4", json={"values": values})
+        changes = captured.payloads[0]["data"]["product"]["changes"]["values"]
+        assert changes["flag"][0]["type"] == "boolean"
+        assert changes["count"][0]["type"] == "number"
+        assert changes["tags"][0]["type"] == "multiselect"
+
+
+class TestFilterSyntax:
+    def test_square_bracket_membership(self):
+        subscribe([f"{PRODUCT}.created"], filter='user_type in ["api", "job"]')
+        with capture_webhooks() as captured:
+            client.post("/api/rest/v1/products", json={"identifier": "sb"})
+        assert len(captured.calls) == 1
+
+    def test_null_locale_matches_equality(self):
+        subscribe([f"{PRODUCT}.updated.delta"], filter='locale = "en_US" and scope = "ecommerce"')
+        client.post("/api/rest/v1/products", json={"identifier": "nl"})
+        values = {"sku_note": [{"locale": None, "scope": None, "data": "x"}]}
+        with capture_webhooks() as captured:
+            client.patch("/api/rest/v1/products/nl", json={"values": values})
+        assert len(captured.calls) == 1
+
+    def test_non_matching_locale_is_excluded(self):
+        subscribe([f"{PRODUCT}.updated.delta"], filter='locale = "fr_FR"')
+        client.post("/api/rest/v1/products", json={"identifier": "nm"})
+        values = {"name": [{"locale": "en_US", "scope": None, "data": "x"}]}
+        with capture_webhooks() as captured:
+            client.patch("/api/rest/v1/products/nm", json={"values": values})
+        assert captured.calls == []
+
+    def test_overlong_filter_is_rejected(self):
+        _create_subscriber()
+        res = client.post(
+            "/api/v1/subscribers/sub-1/subscriptions",
+            json={"id": "long", "events": [f"{PRODUCT}.created"], "filter": 'user = "' + "a" * 600 + '"'},
+        )
+        assert res.status_code == 422
+
+
+class TestDeliveryIsolation:
+    def test_invalid_url_does_not_block_other_subscriptions(self):
+        _create_subscriber()
+        bad = {"id": "bad", "events": [f"{PRODUCT}.created"], "config": {"url": "https://host:notaport/x"}}
+        good = {"id": "good", "events": [f"{PRODUCT}.created"], "config": {"url": WEBHOOK_URL}}
+        client.post("/api/v1/subscribers/sub-1/subscriptions", json=bad)
+        client.post("/api/v1/subscribers/sub-1/subscriptions", json=good)
+        seen: list[str] = []
+
+        async def fake_post(self: Any, url: str, *args: Any, **kwargs: Any) -> MagicMock:
+            if "notaport" in url:
+                raise httpx.InvalidURL("bad port")
+            seen.append(url)
+            response = MagicMock()
+            response.status_code = 200
+            return response
+
+        with patch("httpx.AsyncClient.post", new=fake_post):
+            res = client.post("/api/rest/v1/products", json={"identifier": "iso"})
+        assert res.status_code == 201
+        assert seen == [WEBHOOK_URL]
+
+    def test_non_string_secret_does_not_crash_delivery(self):
+        subscribe(
+            [f"{PRODUCT}.created"],
+            config={"url": WEBHOOK_URL, "secret": {"primary": 12345}},
+        )
+        with capture_webhooks() as captured:
+            res = client.post("/api/rest/v1/products", json={"identifier": "ns"})
+        assert res.status_code == 201
+        assert len(captured.calls) == 1
+        assert "X-AKENEO-SIGNATURE-PRIMARY" not in captured.calls[0]["headers"]
+
+    def test_logs_are_partitioned_per_database(self):
+        subscribe([f"{PRODUCT}.created"])
+        with capture_webhooks():
+            client.post("/api/rest/v1/products", json={"identifier": "db-a"})
+        from akeneo_mock_server import database
+
+        token = database.db_name_var.set("other_db_for_logs")
+        try:
+            from akeneo_mock_server.events import get_delivery_logs
+
+            assert get_delivery_logs() == []
+        finally:
+            database.db_name_var.reset(token)
+        assert len(client.get("/api/v1/logs").json()["items"]) == 1

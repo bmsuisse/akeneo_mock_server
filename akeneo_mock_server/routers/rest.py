@@ -18,7 +18,7 @@ from akeneo_mock_server.common import (
     apply_patch,
     safe_json_body,
 )
-from akeneo_mock_server.events import dispatch_event
+from akeneo_mock_server.events import EVENT_ENTITIES, dispatch_event
 from akeneo_mock_server.database import MODELS, SUB_MODELS, ThreeLevelAttributeOptionModel, get_db
 from akeneo_mock_server.pagination import (
     build_href,
@@ -982,7 +982,9 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                 event_resource = validated_data
         else:
             dict_keys_in_patch = {k for k, v in data.items() if isinstance(v, dict) or v is None}
-            if dict_keys_in_patch:
+            if entity_name in EVENT_ENTITIES:
+                row = db.execute(f"SELECT * FROM {table} WHERE id = %s", (code,)).fetchone()
+            elif dict_keys_in_patch:
                 existing_cols = _get_table_columns(db, table)
                 cols_to_select = (dict_keys_in_patch & existing_cols) | {"id"}
                 select_cols = ", ".join(f'"{c}"' for c in sorted(cols_to_select))
@@ -1253,7 +1255,10 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
 
     @router.post(base_path, status_code=201)
     async def create_sub_item(
-        parent_code: str, request: Request, db: psycopg.Connection = Depends(get_db)
+        parent_code: str,
+        request: Request,
+        background_tasks: BackgroundTasks,
+        db: psycopg.Connection = Depends(get_db),
     ) -> JSONResponse:
         if is_attribute_options_sub_entity:
             _validate_attribute_option_parent_type(db, parent_code)
@@ -1267,6 +1272,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         validated_data = _validate_complete_payload(data, model)
         _upsert_item(db, table, pk_field, code, validated_data, parent_code)
         db.commit()
+        background_tasks.add_task(dispatch_event, sub_entity_key, "created", validated_data, None, parent_code)
         from urllib.parse import quote
 
         return JSONResponse(
@@ -1279,6 +1285,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
     async def patch_multiple_sub_items(
         parent_code: str,
         request: Request,
+        background_tasks: BackgroundTasks,
         db: psycopg.Connection = Depends(get_db),
     ) -> Response:
         if is_attribute_options_sub_entity:
@@ -1316,9 +1323,13 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
                 validated_payload = _validate_complete_payload(payload, model)
                 _upsert_item(db, table, pk_field, code, validated_payload, parent_code)
                 responses.append({"line": index + 1, pk_field: code, "status_code": 201})
+                background_tasks.add_task(
+                    dispatch_event, sub_entity_key, "created", validated_payload, None, parent_code
+                )
                 continue
 
             existing_data = _get_item_data_dict(row)
+            previous_data = copy.deepcopy(existing_data)
             existing_data = apply_patch(existing_data, data)
             existing_data[pk_field] = code
             existing_data["parent_id"] = parent_code
@@ -1333,6 +1344,9 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
             validated_payload = _validate_complete_payload(existing_data, model)
             _upsert_item(db, table, pk_field, code, validated_payload, parent_code)
             responses.append({"line": index + 1, pk_field: code, "status_code": 204})
+            background_tasks.add_task(
+                dispatch_event, sub_entity_key, "updated", validated_payload, previous_data, parent_code
+            )
 
         db.commit()
         media_type = (
@@ -1347,14 +1361,20 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
 
     @router.patch(f"{base_path}/{{code}}", status_code=204)
     async def patch_sub_item(
-        parent_code: str, code: str, request: Request, db: psycopg.Connection = Depends(get_db)
+        parent_code: str,
+        code: str,
+        request: Request,
+        background_tasks: BackgroundTasks,
+        db: psycopg.Connection = Depends(get_db),
     ) -> Response:
         if is_attribute_options_sub_entity:
             _validate_attribute_option_parent_type(db, parent_code)
         data = await safe_json_body(request)
         row = db.execute(f"SELECT * FROM {table} WHERE parent_id = %s AND id = %s", (parent_code, code)).fetchone()
+        previous_data: dict[str, Any] | None = None
         if row:
             existing = _get_item_data_dict(row)
+            previous_data = copy.deepcopy(existing)
             data = apply_patch(existing, data)
         data[pk_field] = code
         data["parent_id"] = parent_code
@@ -1363,6 +1383,10 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         validated_data = _validate_complete_payload(data, model)
         _upsert_item(db, table, pk_field, code, validated_data, parent_code)
         db.commit()
+        event_action = "created" if previous_data is None else "updated"
+        background_tasks.add_task(
+            dispatch_event, sub_entity_key, event_action, validated_data, previous_data, parent_code
+        )
         return Response(status_code=204)
 
 

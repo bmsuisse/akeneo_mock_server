@@ -371,7 +371,7 @@ class ReferenceEntityAttributeModel(SubEntityBase):
 
 
 class AssetModel(SubEntityBase):
-    pass
+    values: dict[str, Any] = Field(default_factory=dict)
 
 
 class AssetAttributeModel(SubEntityBase):

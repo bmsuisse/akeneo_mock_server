@@ -1,17 +1,31 @@
-import psycopg
-from psycopg.types.json import Jsonb
 from typing import Any
 
+import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
+from psycopg.types.json import Jsonb
 
 from akeneo_mock_server.common import safe_json_body, safe_loads
 from akeneo_mock_server.database import get_db
-from akeneo_mock_server.events import DELIVERY_LOGS, now_iso
+from akeneo_mock_server.events import (
+    EVENT_SAMPLES,
+    PLATFORM_EVENT_TYPES,
+    dispatch_raw_event,
+    get_delivery_logs,
+    now_iso,
+    validate_subscription,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["event-platform"])
 
 REDACTED = "***redacted***"
+
+
+def _validate_subscription_payload(data: dict[str, Any]) -> None:
+    try:
+        validate_subscription(data)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 def present_subscription(data: dict[str, Any]) -> dict[str, Any]:
@@ -120,6 +134,7 @@ async def create_subscription(
     subscriber_id: str, request: Request, db: psycopg.Connection = Depends(get_db)
 ) -> JSONResponse:
     data = await safe_json_body(request)
+    _validate_subscription_payload(data)
     subscription_id = data.get("id")
     if not isinstance(subscription_id, str) or not subscription_id:
         raise HTTPException(status_code=422, detail="Missing 'id' field in payload")
@@ -159,6 +174,7 @@ async def patch_subscription(
     db: psycopg.Connection = Depends(get_db),
 ) -> Response:
     data = await safe_json_body(request)
+    _validate_subscription_payload(data)
     row = db.execute(
         "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
     ).fetchone()
@@ -237,9 +253,28 @@ def get_logs(
 ) -> dict[str, list[dict[str, Any]]]:
     items = [
         log
-        for log in DELIVERY_LOGS
+        for log in get_delivery_logs()
         if (subscriber_id is None or log.get("subscriber_id") == subscriber_id)
         and (subscription_id is None or log.get("subscription_id") == subscription_id)
         and (log_type is None or log.get("log_type") == log_type)
     ]
     return {"items": items}
+
+
+@router.get("/mock/events")
+def list_mock_events() -> dict[str, list[str]]:
+    return {"items": PLATFORM_EVENT_TYPES}
+
+
+@router.post("/mock/events")
+async def emit_mock_event(request: Request) -> dict[str, int]:
+    body = await safe_json_body(request)
+    event_type = body.get("type")
+    if event_type not in EVENT_SAMPLES:
+        raise HTTPException(status_code=422, detail=f"Unknown event type: {event_type}")
+    data = body.get("data")
+    if data is None:
+        data = EVENT_SAMPLES[event_type]
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=422, detail="'data' must be an object")
+    return {"delivered": await dispatch_raw_event(event_type, data)}
