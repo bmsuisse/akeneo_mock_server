@@ -10,7 +10,7 @@ hooks = [
 
 [[repos]]
 repo = "https://github.com/astral-sh/ruff-pre-commit"
-rev = "v0.15.7"
+rev = "v0.17.1"
 hooks = [
     { id = "ruff-check", args = ["--fix"], exclude = '^pim-api-docs/' },
     { id = "ruff-format", exclude = '^pim-api-docs/' },
