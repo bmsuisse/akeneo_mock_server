@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+
 from akeneo_mock_server.app import app
 
 client = TestClient(app)
@@ -10,7 +11,7 @@ client = TestClient(app)
 
 
 class TestProducts:
-    def test_list_products_empty(self):
+    def test_list_products_empty(self) -> None:
         """GET /products on an empty DB returns an empty items list."""
         res = client.get("/api/rest/v1/products")
         assert res.status_code == 200
@@ -18,14 +19,14 @@ class TestProducts:
         assert "_embedded" in body
         assert body["_embedded"]["items"] == []
 
-    def test_create_product(self):
+    def test_create_product(self) -> None:
         """POST /products creates a product and returns 201."""
         payload = {"identifier": "test-product-1", "family": "shoes", "enabled": True}
         res = client.post("/api/rest/v1/products", json=payload)
         assert res.status_code == 201
         assert res.headers["location"] == "/api/rest/v1/products/test-product-1"
 
-    def test_get_product_after_create(self):
+    def test_get_product_after_create(self) -> None:
         """GET /products/{code} returns the product that was just created."""
         payload = {"identifier": "my-product", "family": "tshirts"}
         client.post("/api/rest/v1/products", json=payload)
@@ -36,7 +37,7 @@ class TestProducts:
         assert body["identifier"] == "my-product"
         assert body["family"] == "tshirts"
 
-    def test_list_products_after_create(self):
+    def test_list_products_after_create(self) -> None:
         """GET /products returns the created product in the list."""
         client.post("/api/rest/v1/products", json={"identifier": "product-a"})
         client.post("/api/rest/v1/products", json={"identifier": "product-b"})
@@ -48,7 +49,7 @@ class TestProducts:
         assert "product-a" in codes
         assert "product-b" in codes
 
-    def test_patch_product(self):
+    def test_patch_product(self) -> None:
         """PATCH /products/{code} updates an existing product."""
         client.post("/api/rest/v1/products", json={"identifier": "to-patch", "family": "old"})
 
@@ -61,7 +62,7 @@ class TestProducts:
         assert body["family"] == "new"
         assert body["enabled"] is False
 
-    def test_create_product_with_values(self):
+    def test_create_product_with_values(self) -> None:
         payload = {
             "identifier": "values-create",
             "family": "shoes",
@@ -80,7 +81,7 @@ class TestProducts:
         assert body["values"]["name"][0]["data"] == "Runner"
         assert body["values"]["description"][0]["data"] == "Light shoe"
 
-    def test_products_and_products_uuid_are_same_resource(self):
+    def test_products_and_products_uuid_are_same_resource(self) -> None:
         payload = {
             "identifier": "shared-product",
             "family": "shoes",
@@ -96,7 +97,7 @@ class TestProducts:
         assert uuid_res.status_code == 200
         assert uuid_res.json()["identifier"] == "shared-product"
 
-    def test_create_via_products_uuid_is_readable_via_products(self):
+    def test_create_via_products_uuid_is_readable_via_products(self) -> None:
         payload = {
             "uuid": "shared-uuid-1",
             "identifier": "shared-identifier-1",
@@ -109,7 +110,7 @@ class TestProducts:
         assert product_res.status_code == 200
         assert product_res.json()["uuid"] == "shared-uuid-1"
 
-    def test_uuid_must_be_unique_across_products_endpoints(self):
+    def test_uuid_must_be_unique_across_products_endpoints(self) -> None:
         first = {
             "uuid": "unique-uuid-1",
             "identifier": "unique-identifier-1",
@@ -121,7 +122,7 @@ class TestProducts:
         assert client.post("/api/rest/v1/products-uuid", json=first).status_code == 201
         assert client.post("/api/rest/v1/products", json=second).status_code == 409
 
-    def test_identifier_must_be_unique_across_products_endpoints(self):
+    def test_identifier_must_be_unique_across_products_endpoints(self) -> None:
         first = {
             "identifier": "unique-identifier-3",
             "family": "coats",
@@ -133,7 +134,7 @@ class TestProducts:
         assert client.post("/api/rest/v1/products", json=first).status_code == 201
         assert client.post("/api/rest/v1/products-uuid", json=second).status_code == 409
 
-    def test_patch_product_values_merges_instead_of_replacing(self):
+    def test_patch_product_values_merges_instead_of_replacing(self) -> None:
         client.post(
             "/api/rest/v1/products",
             json={
@@ -169,7 +170,7 @@ class TestProducts:
         assert body["values"]["description"][0]["data"] == "Old Description"
         assert body["values"]["color"][0]["data"] == "blue"
 
-    def test_patch_product_without_values_keeps_existing_values(self):
+    def test_patch_product_without_values_keeps_existing_values(self) -> None:
         client.post(
             "/api/rest/v1/products",
             json={
@@ -189,7 +190,7 @@ class TestProducts:
         assert body["enabled"] is False
         assert body["values"]["name"][0]["data"] == "Keep Me"
 
-    def test_patch_product_values_non_dict_returns_422(self):
+    def test_patch_product_values_non_dict_returns_422(self) -> None:
         client.post(
             "/api/rest/v1/products",
             json={
@@ -207,7 +208,7 @@ class TestProducts:
         assert get_res.status_code == 200
         assert get_res.json()["values"]["name"][0]["data"] == "Keep"
 
-    def test_patch_product_values_locale_scope_merge(self):
+    def test_patch_product_values_locale_scope_merge(self) -> None:
         client.post(
             "/api/rest/v1/products",
             json={
@@ -252,7 +253,7 @@ class TestProducts:
         assert name_by_locale["fr_FR"] == "Tasse extraordinaire"
         assert body["values"]["short_description"][0]["data"] == "This mug is a must-have!"
 
-    def test_patch_null_for_object_field_returns_422(self):
+    def test_patch_null_for_object_field_returns_422(self) -> None:
         client.post(
             "/api/rest/v1/products",
             json={
@@ -264,7 +265,7 @@ class TestProducts:
         patch_res = client.patch("/api/rest/v1/products/null-labels", json={"values": None})
         assert patch_res.status_code == 422
 
-    def test_patch_product_upserts_if_not_found(self):
+    def test_patch_product_upserts_if_not_found(self) -> None:
         """PATCH on a non-existent product creates it (upsert behaviour)."""
         res = client.patch("/api/rest/v1/products/new-via-patch", json={"family": "upserted"})
         assert res.status_code == 204
@@ -273,28 +274,28 @@ class TestProducts:
         assert get_res.status_code == 200
         assert get_res.json()["family"] == "upserted"
 
-    def test_create_duplicate_product_returns_409(self):
+    def test_create_duplicate_product_returns_409(self) -> None:
         """POST with a duplicate identifier returns 409 Conflict."""
         client.post("/api/rest/v1/products", json={"identifier": "dup"})
         res = client.post("/api/rest/v1/products", json={"identifier": "dup"})
         assert res.status_code == 409
 
-    def test_get_nonexistent_product_returns_404(self):
+    def test_get_nonexistent_product_returns_404(self) -> None:
         """GET /products/{code} for an unknown product returns 404."""
         res = client.get("/api/rest/v1/products/doesnt-exist")
         assert res.status_code == 404
 
-    def test_create_product_missing_identifier_returns_422(self):
+    def test_create_product_missing_identifier_returns_422(self) -> None:
         """POST without 'identifier' field returns 422."""
         res = client.post("/api/rest/v1/products", json={"family": "shoes"})
         assert res.status_code == 422
 
-    def test_create_product_null_identifier_returns_422(self):
+    def test_create_product_null_identifier_returns_422(self) -> None:
         """POST with null identifier returns 422 (not a 500 crash)."""
         res = client.post("/api/rest/v1/products", json={"identifier": None})
         assert res.status_code == 422
 
-    def test_create_product_invalid_json_returns_415(self):
+    def test_create_product_invalid_json_returns_415(self) -> None:
         """POST with non-JSON body returns 415."""
         res = client.post(
             "/api/rest/v1/products",
@@ -310,7 +311,7 @@ class TestProducts:
 
 
 class TestCategories:
-    def test_create_and_get_category(self):
+    def test_create_and_get_category(self) -> None:
         """POST then GET round-trip for a category."""
         payload = {"code": "cat-shoes", "labels": {"en_US": "Shoes"}}
         res = client.post("/api/rest/v1/categories", json=payload)
@@ -320,7 +321,7 @@ class TestCategories:
         assert get_res.status_code == 200
         assert get_res.json()["code"] == "cat-shoes"
 
-    def test_list_categories(self):
+    def test_list_categories(self) -> None:
         """GET /categories returns all created categories."""
         client.post("/api/rest/v1/categories", json={"code": "cat-a"})
         client.post("/api/rest/v1/categories", json={"code": "cat-b"})
@@ -330,7 +331,7 @@ class TestCategories:
         items = res.json()["_embedded"]["items"]
         assert len(items) >= 2
 
-    def test_patch_category(self):
+    def test_patch_category(self) -> None:
         """PATCH updates an existing category's labels."""
         client.post("/api/rest/v1/categories", json={"code": "c1", "labels": {"en_US": "Old"}})
         client.patch("/api/rest/v1/categories/c1", json={"labels": {"en_US": "New"}})
@@ -339,7 +340,7 @@ class TestCategories:
         assert res.status_code == 200
         assert res.json()["labels"]["en_US"] == "New"
 
-    def test_patch_category_labels_merges_locales(self):
+    def test_patch_category_labels_merges_locales(self) -> None:
         client.post(
             "/api/rest/v1/categories",
             json={"code": "boots", "labels": {"en_US": "Boots", "fr_FR": "Bottes"}},
@@ -357,7 +358,7 @@ class TestCategories:
 
 
 class TestAssociationTypes:
-    def test_patch_association_type_uses_path_code(self):
+    def test_patch_association_type_uses_path_code(self) -> None:
         client.post(
             "/api/rest/v1/association-types",
             json={"code": "upsell", "labels": {"en_US": "Upsell"}, "is_quantified": False, "is_two_way": False},
@@ -376,7 +377,7 @@ class TestAssociationTypes:
         assert body["labels"]["en_US"] == "Upsell"
         assert body["labels"]["fr_FR"] == "Vente incitative"
 
-    def test_patch_association_type_coerces_boolean_values(self):
+    def test_patch_association_type_coerces_boolean_values(self) -> None:
         client.post(
             "/api/rest/v1/association-types",
             json={"code": "cross-sell", "labels": {}, "is_quantified": False, "is_two_way": False},
@@ -394,7 +395,7 @@ class TestAssociationTypes:
         assert body["is_quantified"] is True
         assert body["is_two_way"] is False
 
-    def test_patch_category_labels_null_returns_422(self):
+    def test_patch_category_labels_null_returns_422(self) -> None:
         client.post(
             "/api/rest/v1/categories",
             json={
@@ -416,7 +417,7 @@ class TestAssociationTypes:
 
 
 class TestAttributes:
-    def test_create_and_get_attribute(self):
+    def test_create_and_get_attribute(self) -> None:
         """POST then GET for an attribute."""
         payload = {"code": "attr-color", "type": "pim_catalog_text"}
         res = client.post("/api/rest/v1/attributes", json=payload)
@@ -426,7 +427,7 @@ class TestAttributes:
         assert res.status_code == 200
         assert res.json()["code"] == "attr-color"
 
-    def test_list_attributes(self):
+    def test_list_attributes(self) -> None:
         """GET /attributes returns all created attributes."""
         client.post("/api/rest/v1/attributes", json={"code": "a1", "type": "pim_catalog_text"})
         res = client.get("/api/rest/v1/attributes")
@@ -441,7 +442,7 @@ class TestAttributes:
 
 
 class TestFamilies:
-    def test_create_family_and_list(self):
+    def test_create_family_and_list(self) -> None:
         """POST + GET /families."""
         client.post("/api/rest/v1/families", json={"code": "fam-summer"})
         res = client.get("/api/rest/v1/families")
@@ -449,7 +450,7 @@ class TestFamilies:
         items = res.json()["_embedded"]["items"]
         assert any(i["code"] == "fam-summer" for i in items)
 
-    def test_create_family_variant(self):
+    def test_create_family_variant(self) -> None:
         """POST /families/{code}/variants creates a variant."""
         client.post("/api/rest/v1/families", json={"code": "fam-x"})
         res = client.post(

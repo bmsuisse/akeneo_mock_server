@@ -1,5 +1,7 @@
+import contextlib
 import json
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from fastapi import HTTPException, Request
 
@@ -58,17 +60,13 @@ def merge_value_locale_scope(
     for item in existing_arr:
         if not isinstance(item, dict):
             continue
-        try:
+        with contextlib.suppress(TypeError):
             keyed[(item.get("locale"), item.get("scope", item.get("channel")))] = item
-        except TypeError:
-            pass
     for item in incoming_arr:
         if not isinstance(item, dict):
             continue
-        try:
+        with contextlib.suppress(TypeError):
             keyed[(item.get("locale"), item.get("scope", item.get("channel")))] = item
-        except TypeError:
-            pass
     return list(keyed.values())
 
 
@@ -81,11 +79,13 @@ def apply_patch(existing: dict[str, Any], patch: dict[str, Any]) -> dict[str, An
             )
         if isinstance(existing_value, dict) and not isinstance(value, dict):
             raise PatchTypeError(
-                f"Property `{key}` expects an object as data, `{type(value).__name__}` given. Check the standard format documentation."
+                f"Property `{key}` expects an object as data, `{type(value).__name__}` given. "
+                "Check the standard format documentation."
             )
         if isinstance(existing_value, list) and not isinstance(value, list):
             raise PatchTypeError(
-                f"Property `{key}` expects an array as data, `{type(value).__name__}` given. Check the standard format documentation."
+                f"Property `{key}` expects an array as data, `{type(value).__name__}` given. "
+                "Check the standard format documentation."
             )
         if key == "values" and isinstance(value, dict) and isinstance(existing_value, dict):
             merged_values: dict[str, Any] = dict(existing_value)
@@ -105,7 +105,7 @@ def apply_patch(existing: dict[str, Any], patch: dict[str, Any]) -> dict[str, An
 
 
 def _get_item_pk(item: Any, pk_field: str) -> str:
-    if isinstance(item, Mapping) or (hasattr(item, "keys") and callable(getattr(item, "keys"))):
+    if isinstance(item, Mapping) or (hasattr(item, "keys") and callable(item.keys)):
         # item is likely a dict or psycopg Row
         row_dict = dict(item)
         if pk_field in row_dict:
@@ -125,18 +125,16 @@ def _get_item_pk(item: Any, pk_field: str) -> str:
 
 
 def _get_item_data_dict(item: Any) -> dict[str, Any]:
-    if isinstance(item, Mapping) or (hasattr(item, "keys") and callable(getattr(item, "keys"))):
-        if "data" in item and item["data"]:
+    if isinstance(item, Mapping) or (hasattr(item, "keys") and callable(item.keys)):
+        if item.get("data"):
             return safe_loads(item["data"])
         # If it's a row from an explicit table, we need to convert it to a dict and handle JSON columns
         data = dict(item)
         #
         for key, val in data.items():
             if isinstance(val, str) and val.startswith(("{", "[")):
-                try:
+                with contextlib.suppress(json.JSONDecodeError):
                     data[key] = json.loads(val)
-                except json.JSONDecodeError:
-                    pass
         # Filter out None values to match Akeneo's behavior for optional fields
         return {k: v for k, v in data.items() if v is not None}
     if hasattr(item, "data") and item.data:

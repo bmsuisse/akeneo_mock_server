@@ -7,7 +7,7 @@ from akeneo_mock_server.app import app
 client = TestClient(app)
 
 
-def _setup_family_variant(family_code: str, variant_code: str, axes: list[str]):
+def _setup_family_variant(family_code: str, variant_code: str, axes: list[str]) -> None:
     client.post("/api/rest/v1/families", json={"code": family_code})
     client.post(
         f"/api/rest/v1/families/{family_code}/variants",
@@ -19,7 +19,7 @@ def _setup_family_variant(family_code: str, variant_code: str, axes: list[str]):
 
 
 class TestProductModels:
-    def test_create_product_model_returns_201(self):
+    def test_create_product_model_returns_201(self) -> None:
         _setup_family_variant("pm-fam-1", "pm-fam-1-color", ["color"])
         res = client.post(
             "/api/rest/v1/product-models",
@@ -27,7 +27,7 @@ class TestProductModels:
         )
         assert res.status_code == 201
 
-    def test_get_product_model_by_code(self):
+    def test_get_product_model_by_code(self) -> None:
         _setup_family_variant("pm-fam-2", "pm-fam-2-size", ["size"])
         client.post(
             "/api/rest/v1/product-models",
@@ -40,11 +40,11 @@ class TestProductModels:
         assert body["family"] == "pm-fam-2"
         assert body["family_variant"] == "pm-fam-2-size"
 
-    def test_get_product_model_not_found(self):
+    def test_get_product_model_not_found(self) -> None:
         res = client.get("/api/rest/v1/product-models/nonexistent-pm")
         assert res.status_code == 404
 
-    def test_list_product_models(self):
+    def test_list_product_models(self) -> None:
         _setup_family_variant("pm-fam-3", "pm-fam-3-v", ["color"])
         client.post(
             "/api/rest/v1/product-models",
@@ -60,7 +60,7 @@ class TestProductModels:
         assert "pm-list-a" in codes
         assert "pm-list-b" in codes
 
-    def test_create_product_model_with_categories_and_values(self):
+    def test_create_product_model_with_categories_and_values(self) -> None:
         _setup_family_variant("pm-fam-4", "pm-fam-4-v", ["color"])
         payload = {
             "code": "pm-4",
@@ -75,7 +75,7 @@ class TestProductModels:
         assert body["categories"] == ["master"]
         assert body["values"]["name"][0]["data"] == "My Model"
 
-    def test_create_product_model_with_parent(self):
+    def test_create_product_model_with_parent(self) -> None:
         _setup_family_variant("pm-fam-5", "pm-fam-5-v", ["color"])
         client.post(
             "/api/rest/v1/product-models",
@@ -93,7 +93,7 @@ class TestProductModels:
         body = client.get("/api/rest/v1/product-models/pm-5-child").json()
         assert body["parent"] == "pm-5-root"
 
-    def test_patch_product_model_updates_values(self):
+    def test_patch_product_model_updates_values(self) -> None:
         _setup_family_variant("pm-fam-6", "pm-fam-6-v", ["color"])
         client.post(
             "/api/rest/v1/product-models",
@@ -112,7 +112,7 @@ class TestProductModels:
         body = client.get("/api/rest/v1/product-models/pm-6").json()
         assert body["values"]["name"][0]["data"] == "Updated"
 
-    def test_patch_product_model_merges_values(self):
+    def test_patch_product_model_merges_values(self) -> None:
         _setup_family_variant("pm-fam-7", "pm-fam-7-v", ["color"])
         client.post(
             "/api/rest/v1/product-models",
@@ -136,7 +136,7 @@ class TestProductModels:
         assert "fr_FR" in name_locales
         assert "description" in body["values"]
 
-    def test_duplicate_product_model_code_returns_conflict(self):
+    def test_duplicate_product_model_code_returns_conflict(self) -> None:
         _setup_family_variant("pm-fam-8", "pm-fam-8-v", ["color"])
         payload = {"code": "pm-dup", "family": "pm-fam-8", "family_variant": "pm-fam-8-v"}
         assert client.post("/api/rest/v1/product-models", json=payload).status_code == 201
@@ -146,7 +146,7 @@ class TestProductModels:
 class TestProductModelSearch:
     def _create(
         self, code: str, family: str, variant: str, values: dict | None = None, categories: list | None = None
-    ):
+    ) -> None:
         payload: dict = {"code": code, "family": family, "family_variant": variant}
         if values:
             payload["values"] = values
@@ -154,7 +154,7 @@ class TestProductModelSearch:
             payload["categories"] = categories
         client.post("/api/rest/v1/product-models", json=payload)
 
-    def test_search_by_attribute_value_contains(self):
+    def test_search_by_attribute_value_contains(self) -> None:
         _setup_family_variant("pm-sf-1", "pm-sf-1-v", ["color"])
         self._create(
             "pm-search-a",
@@ -188,16 +188,13 @@ class TestProductModelSearch:
                 "search_locale": "en_US",
             },
         )
-        if res2.status_code >= 300:
-            print(f"Response status: {res2.status_code}")
-            print(f"Response body: {res2.text}")
-        assert res2.status_code == 200
+        assert res2.status_code == 200, f"{res2.status_code}: {res2.text}"
         codes2 = {item["code"] for item in res2.json()["_embedded"]["items"]}
         assert "pm-search-a" in codes2
         assert "pm-search-b" in codes2
         assert len(codes2) == 2
 
-    def test_search_by_categories(self):
+    def test_search_by_categories(self) -> None:
         _setup_family_variant("pm-sf-2", "pm-sf-2-v", ["color"])
         self._create("pm-cat-a", "pm-sf-2", "pm-sf-2-v", categories=["winter_collection"])
         self._create("pm-cat-b", "pm-sf-2", "pm-sf-2-v", categories=["summer_collection"])
@@ -211,7 +208,7 @@ class TestProductModelSearch:
         assert "pm-cat-a" in codes
         assert "pm-cat-b" not in codes
 
-    def test_search_by_family_variant(self):
+    def test_search_by_family_variant(self) -> None:
         _setup_family_variant("pm-sf-3", "pm-sf-3-va", ["color"])
         _setup_family_variant("pm-sf-3", "pm-sf-3-vb", ["size"])
         self._create("pm-fv-a", "pm-sf-3", "pm-sf-3-va")
@@ -226,6 +223,6 @@ class TestProductModelSearch:
         assert "pm-fv-a" in codes
         assert "pm-fv-b" not in codes
 
-    def test_invalid_search_json_returns_422(self):
+    def test_invalid_search_json_returns_422(self) -> None:
         res = client.get("/api/rest/v1/product-models", params={"search": "{"})
         assert res.status_code == 422

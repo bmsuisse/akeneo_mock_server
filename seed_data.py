@@ -1,5 +1,6 @@
-import httpx
 import json
+
+import httpx
 
 BASE_URL = "http://127.0.0.1:8000/api/rest/v1"
 
@@ -565,7 +566,7 @@ def main() -> None:
     for attr in ATTRIBUTES:
         create_entity("attributes", "code", attr)
 
-    print("")
+    print()
     seed_products_ndjson()
     print("\n✅ Seeding complete!")
 

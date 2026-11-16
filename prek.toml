@@ -10,10 +10,17 @@ hooks = [
 
 [[repos]]
 repo = "https://github.com/astral-sh/ruff-pre-commit"
-rev = "v0.17.1"
+rev = "v0.17.4"
 hooks = [
     { id = "ruff-check", args = ["--fix"], exclude = '^pim-api-docs/' },
     { id = "ruff-format", exclude = '^pim-api-docs/' },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+    { id = "ruff-warn-any", name = "ruff warn: typing.Any (ANN401)", language = "system", entry = "uv run ruff check --select ANN401 --exit-zero --output-format concise", types = ["python"], exclude = '^pim-api-docs/', verbose = true },
+    { id = "ty", name = "ty check", language = "system", entry = "uv run --all-groups ty check", types = ["python"], exclude = '^pim-api-docs/', pass_filenames = false },
 ]
 
 [[repos]]

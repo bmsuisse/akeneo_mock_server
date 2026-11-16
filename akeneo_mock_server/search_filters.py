@@ -1,10 +1,10 @@
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlglot import Expr
-from fastapi import HTTPException
 import sqlglot.expressions as exp
+from fastapi import HTTPException
+from sqlglot import Expr
 
 from akeneo_mock_server.common import (
     _sanitize_row_entity,
@@ -174,15 +174,15 @@ def parse_date_value(value: Any) -> datetime | None:
         parsed = datetime.fromisoformat(iso_candidate)
     except ValueError:
         try:
-            parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+            parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
         except ValueError:
             try:
-                parsed = datetime.strptime(value, "%Y-%m-%d")
+                parsed = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC)
             except ValueError:
                 return None
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def resolve_field_values(
@@ -318,7 +318,7 @@ def matches_operator(value: Any, operator: str, expected: Any) -> bool:
         value_date = parse_date_value(value)
         if value_date is None:
             return False
-        threshold = datetime.now(timezone.utc) - timedelta(days=expected)
+        threshold = datetime.now(UTC) - timedelta(days=expected)
         return value_date >= threshold
 
     return False
@@ -363,7 +363,7 @@ def parse_csv_query(value: str | None) -> list[str] | None:
     if value is None:
         return None
     parts = [part.strip() for part in value.split(",") if part.strip()]
-    return parts if parts else None
+    return parts or None
 
 
 def project_entity_values(

@@ -1,14 +1,14 @@
 import copy
 import json
+import logging
 import re
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 from uuid import uuid4
-import psycopg
-from psycopg.types.json import Jsonb
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
+from psycopg.types.json import Jsonb
 from pydantic import ValidationError
 
 from akeneo_mock_server.common import (
@@ -18,8 +18,15 @@ from akeneo_mock_server.common import (
     apply_patch,
     safe_json_body,
 )
+from akeneo_mock_server.database import (
+    MODELS,
+    SUB_MODELS,
+    DbConnection,
+    ThreeLevelAttributeOptionModel,
+    get_db,
+    trusted_sql,
+)
 from akeneo_mock_server.events import EVENT_ENTITIES, dispatch_event
-from akeneo_mock_server.database import MODELS, SUB_MODELS, ThreeLevelAttributeOptionModel, get_db
 from akeneo_mock_server.pagination import (
     build_href,
     is_search_after_only_entity,
@@ -31,24 +38,26 @@ from akeneo_mock_server.pagination import (
     supports_search_after_sub_entity,
     validate_limit,
 )
-from akeneo_mock_server.search_filters import collect_filtered_items
 from akeneo_mock_server.schemas import EntityListQuery, GenericPayload, SearchProductsUuidQuery, SubEntityListQuery
+from akeneo_mock_server.search_filters import collect_filtered_items
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/rest/v1", tags=["rest"])
 
 
-def _find_product_by_uuid(db: psycopg.Connection, code: str) -> dict[str, Any] | None:
+def _find_product_by_uuid(db: DbConnection, code: str) -> dict[str, Any] | None:
     return db.execute("SELECT * FROM products WHERE uuid = %s", (code,)).fetchone()
 
 
-def _generate_unique_product_uuid(db: psycopg.Connection) -> str:
+def _generate_unique_product_uuid(db: DbConnection) -> str:
     generated = str(uuid4())
     while _find_product_by_uuid(db, generated) is not None:
         generated = str(uuid4())
     return generated
 
 
-def _ensure_product_uuid(value: Any, db: psycopg.Connection) -> str:
+def _ensure_product_uuid(value: Any, db: DbConnection) -> str:
     if isinstance(value, str) and value:
         return value
     return _generate_unique_product_uuid(db)
@@ -56,8 +65,8 @@ def _ensure_product_uuid(value: Any, db: psycopg.Connection) -> str:
 
 @router.get("/products-uuid/search")
 def search_products_uuid(
-    query: SearchProductsUuidQuery = Depends(),
-    db: psycopg.Connection = Depends(get_db),
+    query: Annotated[SearchProductsUuidQuery, Depends()],
+    db: Annotated[DbConnection, Depends(get_db)],
 ) -> dict[str, Any]:
     return {
         "_links": {"self": {"href": "/api/rest/v1/products-uuid/search"}},
@@ -80,32 +89,28 @@ def search_products_uuid(
     }
 
 
-def _validate_payload(
-    payload: dict[str, Any], model_class: Any | None = None, partial: bool = False
-) -> dict[str, Any]:
+def _validate_payload(payload: dict[str, Any], model_class: Any | None = None, partial: bool = False) -> dict[str, Any]:
     if model_class is not None:
         if partial:
             return payload
         try:
             return model_class.model_validate(payload).model_dump(mode="python", exclude_unset=True)
         except ValidationError as e:
-            import logging
-
-            logging.error(f"DEBUG: Validation error for model {model_class.__name__}: {e.errors()}")
-            raise HTTPException(status_code=422, detail=e.errors())
+            logger.error("DEBUG: Validation error for model %s: %s", model_class.__name__, e.errors())
+            raise HTTPException(status_code=422, detail=e.errors()) from e
         except Exception as e:
             raise e
     try:
         return GenericPayload.model_validate(payload).model_dump(mode="python")
     except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
+        raise HTTPException(status_code=422, detail=e.errors()) from e
 
 
 def _validate_complete_payload(payload: dict[str, Any], model_class: Any) -> dict[str, Any]:
     try:
         return model_class.model_validate(payload).model_dump(mode="python", exclude_unset=True)
     except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
+        raise HTTPException(status_code=422, detail=e.errors()) from e
 
 
 _ENTITIES_WITH_VALUES: frozenset[str] = frozenset(
@@ -118,7 +123,7 @@ _ENTITIES_WITH_VALUES: frozenset[str] = frozenset(
 )
 
 
-def _validate_select_options(db: psycopg.Connection, attr_code: str, option_codes: list[str]) -> None:
+def _validate_select_options(db: DbConnection, attr_code: str, option_codes: list[str]) -> None:
     rows = db.execute("SELECT id FROM attribute_options WHERE parent_id = %s", (attr_code,)).fetchall()
     if not rows:
         return
@@ -132,7 +137,7 @@ def _validate_select_options(db: psycopg.Connection, attr_code: str, option_code
 
 
 def _validate_attribute_value(
-    attr_code: str, attr_type: str, attr: dict[str, Any], data: Any, db: psycopg.Connection | None = None
+    attr_code: str, attr_type: str, attr: dict[str, Any], data: Any, db: DbConnection | None = None
 ) -> None:
     if attr_type in ("pim_catalog_text", "pim_catalog_textarea", "pim_catalog_identifier"):
         if not isinstance(data, str):
@@ -218,9 +223,9 @@ def _validate_attribute_value(
         if not date_min and not date_max:
             return
         try:
-            date_val = datetime.fromisoformat(data.replace("Z", "+00:00"))
+            date_val = datetime.fromisoformat(data)
             if date_min:
-                min_dt = datetime.fromisoformat(date_min.replace("Z", "+00:00"))
+                min_dt = datetime.fromisoformat(date_min)
                 if date_val.tzinfo is None and min_dt.tzinfo is not None:
                     date_val = date_val.replace(tzinfo=min_dt.tzinfo)
                 elif date_val.tzinfo is not None and min_dt.tzinfo is None:
@@ -231,7 +236,7 @@ def _validate_attribute_value(
                         detail=f"Attribute '{attr_code}': date is before minimum {date_min}.",
                     )
             if date_max:
-                max_dt = datetime.fromisoformat(date_max.replace("Z", "+00:00"))
+                max_dt = datetime.fromisoformat(date_max)
                 if date_val.tzinfo is None and max_dt.tzinfo is not None:
                     date_val = date_val.replace(tzinfo=max_dt.tzinfo)
                 elif date_val.tzinfo is not None and max_dt.tzinfo is None:
@@ -356,7 +361,7 @@ def _validate_attribute_value(
             )
 
 
-def _validate_product_values(db: psycopg.Connection, values: dict[str, Any]) -> None:
+def _validate_product_values(db: DbConnection, values: dict[str, Any]) -> None:
     attr_codes = [code for code, v in values.items() if isinstance(v, list)]
     if not attr_codes:
         return
@@ -383,7 +388,7 @@ def _validate_product_values(db: psycopg.Connection, values: dict[str, Any]) -> 
             _validate_attribute_value(attr_code, attr_type, attr, data, db)
 
 
-def _validate_product_family_attributes(db: psycopg.Connection, data: dict[str, Any]) -> None:
+def _validate_product_family_attributes(db: DbConnection, data: dict[str, Any]) -> None:
     family_code = data.get("family")
     if not family_code:
         return
@@ -410,7 +415,7 @@ def _validate_product_family_attributes(db: psycopg.Connection, data: dict[str, 
             )
 
 
-def _validate_product_values_if_applicable(db: psycopg.Connection, entity_name: str, data: dict[str, Any]) -> None:
+def _validate_product_values_if_applicable(db: DbConnection, entity_name: str, data: dict[str, Any]) -> None:
     if entity_name == "families":
         _validate_family(db, data)
         return
@@ -423,7 +428,7 @@ def _validate_product_values_if_applicable(db: psycopg.Connection, entity_name: 
         _validate_product_family_attributes(db, data)
 
 
-def _validate_family(db: psycopg.Connection, data: dict[str, Any]) -> None:
+def _validate_family(db: DbConnection, data: dict[str, Any]) -> None:
     attributes = data.get("attributes")
     attribute_as_label = data.get("attribute_as_label")
     attribute_as_image = data.get("attribute_as_image")
@@ -454,7 +459,7 @@ def _validate_family(db: psycopg.Connection, data: dict[str, Any]) -> None:
         raise HTTPException(status_code=422, detail=f"Attribute '{attribute_as_image}' does not exist.")
 
 
-def _validate_family_variant_attribute_sets(db: psycopg.Connection, family_code: str, data: dict[str, Any]) -> None:
+def _validate_family_variant_attribute_sets(db: DbConnection, family_code: str, data: dict[str, Any]) -> None:
     variant_attribute_sets = data.get("variant_attribute_sets")
     if not variant_attribute_sets:
         return
@@ -496,7 +501,7 @@ _ATTRIBUTE_OPTION_ALLOWED_TYPES: frozenset[str] = frozenset(
 )
 
 
-def _validate_attribute_option_parent_type(db: psycopg.Connection, attribute_code: str) -> None:
+def _validate_attribute_option_parent_type(db: DbConnection, attribute_code: str) -> None:
     row = db.execute("SELECT id, type FROM attributes WHERE id = %s", (attribute_code,)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail=f"attributes '{attribute_code}' not found.")
@@ -516,9 +521,7 @@ def _supports_sql_pagination_path(entity_name: str, query: EntityListQuery) -> b
         return False
     if query.search_locale is not None or query.search_scope is not None:
         return False
-    if query.attributes is not None or query.locales is not None or query.scope is not None:
-        return False
-    return True
+    return query.attributes is None and query.locales is None and query.scope is None
 
 
 def _parse_collection_payload(content_type: str, body: bytes, model_class: Any | None = None) -> list[dict[str, Any]]:
@@ -543,8 +546,8 @@ def _parse_collection_payload(content_type: str, body: bytes, model_class: Any |
         if "application/json" in content_type:
             try:
                 parsed = json.loads(body)
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                raise HTTPException(status_code=415, detail="Invalid JSON or encoding")
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise HTTPException(status_code=415, detail="Invalid JSON or encoding") from exc
             if isinstance(parsed, list):
                 result: list[dict[str, Any]] = []
                 for item in parsed:
@@ -556,8 +559,8 @@ def _parse_collection_payload(content_type: str, body: bytes, model_class: Any |
             if isinstance(parsed, dict):
                 return [_validate_payload(parsed, model_class, partial=True)]
             return [{"_invalid": parsed}]
-    except UnicodeDecodeError:
-        raise HTTPException(status_code=415, detail="Invalid encoding")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=415, detail="Invalid encoding") from exc
 
     raise HTTPException(
         status_code=415,
@@ -582,7 +585,10 @@ def _apply_table_select_options_flag(
             continue
         validations = column.get("validations")
         if isinstance(validations, dict) and "select_options" in validations:
-            column = {**column, "validations": {k: v for k, v in validations.items() if k != "select_options"}}
+            stripped_columns.append(
+                {**column, "validations": {k: v for k, v in validations.items() if k != "select_options"}}
+            )
+            continue
         stripped_columns.append(column)
     return {**item, "table_configuration": stripped_columns}
 
@@ -592,7 +598,7 @@ _TABLE_COLUMNS_CACHE: dict[str, set[str]] = {}
 _TABLE_COLUMN_TYPES_CACHE: dict[str, dict[str, str]] = {}
 
 
-def _get_table_columns(db: psycopg.Connection, table: str) -> set[str]:
+def _get_table_columns(db: DbConnection, table: str) -> set[str]:
     if table in _TABLE_COLUMNS_CACHE:
         return _TABLE_COLUMNS_CACHE[table]
 
@@ -602,7 +608,7 @@ def _get_table_columns(db: psycopg.Connection, table: str) -> set[str]:
     return columns
 
 
-def _get_table_column_types(db: psycopg.Connection, table: str) -> dict[str, str]:
+def _get_table_column_types(db: DbConnection, table: str) -> dict[str, str]:
     if table in _TABLE_COLUMN_TYPES_CACHE:
         return _TABLE_COLUMN_TYPES_CACHE[table]
 
@@ -629,8 +635,8 @@ def _convert_value_to_type(value: Any, column_type: str) -> Any:
 
 
 def _upsert_item(
-    db: psycopg.Connection, table: str, pk_field: str, code: str, data: dict[str, Any], parent_id: str | None = None
-):
+    db: DbConnection, table: str, pk_field: str, code: str, data: dict[str, Any], parent_id: str | None = None
+) -> None:
     tables_with_data = {
         "asset_families",
         "deprecated_assets",
@@ -649,16 +655,22 @@ def _upsert_item(
 
     if table in tables_with_data:
         if parent_id:
-            sql = f'INSERT INTO "{table}" (id, parent_id, data) VALUES (%s, %s, %s) ON CONFLICT (id) DO UPDATE SET parent_id = EXCLUDED.parent_id, data = EXCLUDED.data'
-            db.execute(sql, (code, parent_id, Jsonb(data)))
+            sql = (
+                f'INSERT INTO "{table}" (id, parent_id, data) VALUES (%s, %s, %s) '
+                "ON CONFLICT (id) DO UPDATE SET parent_id = EXCLUDED.parent_id, data = EXCLUDED.data"
+            )
+            db.execute(trusted_sql(sql), (code, parent_id, Jsonb(data)))
         else:
             sql = (
                 f'INSERT INTO "{table}" (id, data) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data'
             )
-            db.execute(sql, (code, Jsonb(data)))
+            db.execute(trusted_sql(sql), (code, Jsonb(data)))
     elif table == "subscriptions":
         pk = f"{parent_id}/{code}"
-        sql = "INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s) ON CONFLICT (pk) DO UPDATE SET id = EXCLUDED.id, parent_id = EXCLUDED.parent_id, data = EXCLUDED.data"
+        sql = (
+            "INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (pk) DO UPDATE SET id = EXCLUDED.id, parent_id = EXCLUDED.parent_id, data = EXCLUDED.data"
+        )
         db.execute(sql, (pk, code, parent_id, Jsonb(data)))
     else:
         columns = []
@@ -688,11 +700,17 @@ def _upsert_item(
 
         update_set = ", ".join([f"{col} = EXCLUDED.{col}" for col in columns if col != '"id"'])
         if update_set:
-            sql = f'INSERT INTO "{table}" ({", ".join(columns)}) VALUES ({", ".join(placeholders)}) ON CONFLICT (id) DO UPDATE SET {update_set}'
+            sql = (
+                f'INSERT INTO "{table}" ({", ".join(columns)}) VALUES ({", ".join(placeholders)}) '
+                f"ON CONFLICT (id) DO UPDATE SET {update_set}"
+            )
         else:
-            sql = f'INSERT INTO "{table}" ({", ".join(columns)}) VALUES ({", ".join(placeholders)}) ON CONFLICT (id) DO NOTHING'
+            sql = (
+                f'INSERT INTO "{table}" ({", ".join(columns)}) VALUES ({", ".join(placeholders)}) '
+                "ON CONFLICT (id) DO NOTHING"
+            )
 
-        db.execute(sql, values)
+        db.execute(trusted_sql(sql), values)
 
 
 def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
@@ -703,9 +721,9 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
 
     @router.get(base_path)
     def get_items(
-        query: EntityListQuery = Depends(),
+        query: Annotated[EntityListQuery, Depends()],
+        db: Annotated[DbConnection, Depends(get_db)],
         with_table_select_options: bool = False,
-        db: psycopg.Connection = Depends(get_db),
     ) -> dict[str, Any]:
         validate_limit(query.limit)
         resolved_pagination_type = resolve_pagination_type(
@@ -724,7 +742,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                     raise HTTPException(status_code=422, detail="`page` is too large.")
                 offset = (query.page - 1) * query.limit
                 sql = f"SELECT * FROM {table} ORDER BY {order_column} LIMIT %s OFFSET %s"
-                rows = db.execute(sql, (query.limit + 1, offset)).fetchall()
+                rows = db.execute(trusted_sql(sql), (query.limit + 1, offset)).fetchall()
                 sanitized_items: list[tuple[str, dict[str, Any]]] = []
                 for row in rows:
                     entity = _sanitize_row_entity(row, pk_field, model)
@@ -739,7 +757,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                 else:
                     sql = f"SELECT * FROM {table} ORDER BY {order_column} LIMIT %s"
                     params = (query.limit + 1,)
-                rows = db.execute(sql, params).fetchall()
+                rows = db.execute(trusted_sql(sql), params).fetchall()
                 sanitized_items = []
                 for row in rows:
                     entity = _sanitize_row_entity(row, pk_field, model)
@@ -840,13 +858,13 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
     @router.get(f"{base_path}/{{code}}")
     def get_item(
         code: str,
+        db: Annotated[DbConnection, Depends(get_db)],
         with_table_select_options: bool = False,
-        db: psycopg.Connection = Depends(get_db),
     ) -> dict[str, Any] | None:
         if entity_name == "products-uuid":
             item = _find_product_by_uuid(db, code)
         else:
-            item = db.execute(f"SELECT * FROM {table} WHERE id = %s", (code,)).fetchone()
+            item = db.execute(trusted_sql(f"SELECT * FROM {table} WHERE id = %s"), (code,)).fetchone()
         if item is None:
             raise HTTPException(status_code=404, detail=f"{entity_name} '{code}' not found.")
         sanitized = _sanitize_row_entity(item, pk_field, model)
@@ -858,7 +876,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
     async def create_item(
         request: Request,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[DbConnection, Depends(get_db)],
     ) -> JSONResponse:
         data = _validate_payload(await safe_json_body(request), model)
         code = data.get(pk_field)
@@ -866,7 +884,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
             raise HTTPException(status_code=422, detail=f"Missing or invalid '{pk_field}' in payload.")
 
         if entity_name == "products":
-            existing = db.execute(f"SELECT 1 FROM {table} WHERE id = %s", (code,)).fetchone()
+            existing = db.execute(trusted_sql(f"SELECT 1 FROM {table} WHERE id = %s"), (code,)).fetchone()
             if existing is not None:
                 raise HTTPException(status_code=409, detail=f"{entity_name} '{code}' already exists.")
             product_uuid = _ensure_product_uuid(data.get("uuid"), db)
@@ -892,7 +910,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
             _upsert_item(db, "products", "identifier", identifier, data)
             db.commit()
         else:
-            existing = db.execute(f"SELECT 1 FROM {table} WHERE id = %s", (code,)).fetchone()
+            existing = db.execute(trusted_sql(f"SELECT 1 FROM {table} WHERE id = %s"), (code,)).fetchone()
             if existing is not None:
                 raise HTTPException(status_code=409, detail=f"{entity_name} '{code}' already exists.")
             _validate_product_values_if_applicable(db, entity_name, data)
@@ -911,14 +929,14 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
         code: str,
         request: Request,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[DbConnection, Depends(get_db)],
     ) -> Response:
         data = _validate_payload(await safe_json_body(request), model, partial=True)
         previous_data: dict[str, Any] | None = None
         event_resource: dict[str, Any] = data
 
         if entity_name == "products":
-            row = db.execute(f"SELECT * FROM {table} WHERE id = %s", (code,)).fetchone()
+            row = db.execute(trusted_sql(f"SELECT * FROM {table} WHERE id = %s"), (code,)).fetchone()
             if row is None:
                 data["identifier"] = code
                 product_uuid = _ensure_product_uuid(data.get("uuid"), db)
@@ -983,14 +1001,14 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
         else:
             dict_keys_in_patch = {k for k, v in data.items() if isinstance(v, dict) or v is None}
             if entity_name in EVENT_ENTITIES:
-                row = db.execute(f"SELECT * FROM {table} WHERE id = %s", (code,)).fetchone()
+                row = db.execute(trusted_sql(f"SELECT * FROM {table} WHERE id = %s"), (code,)).fetchone()
             elif dict_keys_in_patch:
                 existing_cols = _get_table_columns(db, table)
                 cols_to_select = (dict_keys_in_patch & existing_cols) | {"id"}
                 select_cols = ", ".join(f'"{c}"' for c in sorted(cols_to_select))
-                row = db.execute(f"SELECT {select_cols} FROM {table} WHERE id = %s", (code,)).fetchone()
+                row = db.execute(trusted_sql(f"SELECT {select_cols} FROM {table} WHERE id = %s"), (code,)).fetchone()
             else:
-                row = db.execute(f"SELECT id FROM {table} WHERE id = %s", (code,)).fetchone()
+                row = db.execute(trusted_sql(f"SELECT id FROM {table} WHERE id = %s"), (code,)).fetchone()
             if row is None:
                 data[pk_field] = code
                 validated_data = _validate_complete_payload(data, model)
@@ -1019,12 +1037,12 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
     def delete_item(
         code: str,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[DbConnection, Depends(get_db)],
     ) -> Response:
         if entity_name == "products-uuid":
             row = _find_product_by_uuid(db, code)
         else:
-            row = db.execute(f"SELECT * FROM {table} WHERE id = %s", (code,)).fetchone()
+            row = db.execute(trusted_sql(f"SELECT * FROM {table} WHERE id = %s"), (code,)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail=f"{entity_name} '{code}' not found.")
 
@@ -1037,7 +1055,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
         if entity_name == "products-uuid":
             db.execute("DELETE FROM products WHERE uuid = %s", (code,))
         else:
-            db.execute(f"DELETE FROM {table} WHERE id = %s", (code,))
+            db.execute(trusted_sql(f"DELETE FROM {table} WHERE id = %s"), (code,))
         db.commit()
 
         background_tasks.add_task(dispatch_event, entity_name, "deleted", deleted_data)
@@ -1047,7 +1065,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
     async def patch_multiple_items(
         request: Request,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[DbConnection, Depends(get_db)],
     ) -> Response:
         content_type = request.headers.get("content-type", "")
         body = await request.body()
@@ -1106,7 +1124,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
                 responses.append({"line": index + 1, pk_field: code, "status_code": 204})
                 background_tasks.add_task(dispatch_event, entity_name, "updated", existing_data, previous_data)
             else:
-                row = db.execute(f"SELECT * FROM {table} WHERE id = %s", (code,)).fetchone()
+                row = db.execute(trusted_sql(f"SELECT * FROM {table} WHERE id = %s"), (code,)).fetchone()
                 try:
                     if row is None:
                         _validate_product_values_if_applicable(db, entity_name, data)
@@ -1155,12 +1173,12 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
     @router.get(base_path)
     def get_sub_items(
         parent_code: str,
-        query: SubEntityListQuery = Depends(),
-        db: psycopg.Connection = Depends(get_db),
+        query: Annotated[SubEntityListQuery, Depends()],
+        db: Annotated[DbConnection, Depends(get_db)],
     ) -> dict[str, Any] | list[dict[str, Any]]:
         if is_non_paginated_sub_entity:
             rows = db.execute(
-                f"SELECT * FROM {table} WHERE parent_id = %s ORDER BY id",
+                trusted_sql(f"SELECT * FROM {table} WHERE parent_id = %s ORDER BY id"),
                 (parent_code,),
             ).fetchall()
             items: list[dict[str, Any]] = []
@@ -1185,14 +1203,17 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
                 raise HTTPException(status_code=422, detail="`page` is too large.")
             offset = (query.page - 1) * query.limit
             sql = f"SELECT * FROM {table} WHERE parent_id = %s ORDER BY {order_column} LIMIT %s OFFSET %s"
-            rows = db.execute(sql, (parent_code, query.limit + 1, offset)).fetchall()
+            rows = db.execute(trusted_sql(sql), (parent_code, query.limit + 1, offset)).fetchall()
         else:
             if query.search_after:
-                sql = f"SELECT * FROM {table} WHERE parent_id = %s AND {order_column} > %s ORDER BY {order_column} LIMIT %s"
-                rows = db.execute(sql, (parent_code, query.search_after, query.limit + 1)).fetchall()
+                sql = (
+                    f"SELECT * FROM {table} WHERE parent_id = %s AND {order_column} > %s "
+                    f"ORDER BY {order_column} LIMIT %s"
+                )
+                rows = db.execute(trusted_sql(sql), (parent_code, query.search_after, query.limit + 1)).fetchall()
             else:
                 sql = f"SELECT * FROM {table} WHERE parent_id = %s ORDER BY {order_column} LIMIT %s"
-                rows = db.execute(sql, (parent_code, query.limit + 1)).fetchall()
+                rows = db.execute(trusted_sql(sql), (parent_code, query.limit + 1)).fetchall()
 
         entries = []
         for row in rows:
@@ -1247,8 +1268,12 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         return {"_links": links, "_embedded": {"items": [e[1] for e in selected]}}
 
     @router.get(f"{base_path}/{{code}}")
-    def get_sub_item(parent_code: str, code: str, db: psycopg.Connection = Depends(get_db)) -> dict[str, Any] | None:
-        row = db.execute(f"SELECT * FROM {table} WHERE parent_id = %s AND id = %s", (parent_code, code)).fetchone()
+    def get_sub_item(
+        parent_code: str, code: str, db: Annotated[DbConnection, Depends(get_db)]
+    ) -> dict[str, Any] | None:
+        row = db.execute(
+            trusted_sql(f"SELECT * FROM {table} WHERE parent_id = %s AND id = %s"), (parent_code, code)
+        ).fetchone()
         if not row:
             raise HTTPException(status_code=404)
         return _sanitize_row_entity(row, pk_field, model)
@@ -1258,7 +1283,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         parent_code: str,
         request: Request,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[DbConnection, Depends(get_db)],
     ) -> JSONResponse:
         if is_attribute_options_sub_entity:
             _validate_attribute_option_parent_type(db, parent_code)
@@ -1286,7 +1311,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         parent_code: str,
         request: Request,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[DbConnection, Depends(get_db)],
     ) -> Response:
         if is_attribute_options_sub_entity:
             _validate_attribute_option_parent_type(db, parent_code)
@@ -1305,7 +1330,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
                 continue
 
             row = db.execute(
-                f"SELECT * FROM {table} WHERE parent_id = %s AND id = %s",
+                trusted_sql(f"SELECT * FROM {table} WHERE parent_id = %s AND id = %s"),
                 (parent_code, code),
             ).fetchone()
             if row is None:
@@ -1365,12 +1390,14 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         code: str,
         request: Request,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[DbConnection, Depends(get_db)],
     ) -> Response:
         if is_attribute_options_sub_entity:
             _validate_attribute_option_parent_type(db, parent_code)
         data = await safe_json_body(request)
-        row = db.execute(f"SELECT * FROM {table} WHERE parent_id = %s AND id = %s", (parent_code, code)).fetchone()
+        row = db.execute(
+            trusted_sql(f"SELECT * FROM {table} WHERE parent_id = %s AND id = %s"), (parent_code, code)
+        ).fetchone()
         previous_data: dict[str, Any] | None = None
         if row:
             existing = _get_item_data_dict(row)
@@ -1407,10 +1434,10 @@ def register_three_level_routes(parent_entity: str, table: str) -> None:
 
     @router.get(base_path)
     def get_three_level_items(
-        parent_code: str, attribute_code: str, db: psycopg.Connection = Depends(get_db)
+        parent_code: str, attribute_code: str, db: Annotated[DbConnection, Depends(get_db)]
     ) -> JSONResponse:
         rows = db.execute(
-            f"SELECT * FROM {table} WHERE parent_id = %s ORDER BY id",
+            trusted_sql(f"SELECT * FROM {table} WHERE parent_id = %s ORDER BY id"),
             (f"{parent_code}:{attribute_code}",),
         ).fetchall()
         items: list[dict[str, Any]] = []
@@ -1422,10 +1449,10 @@ def register_three_level_routes(parent_entity: str, table: str) -> None:
 
     @router.get(f"{base_path}/{{code}}")
     def get_three_level_item(
-        parent_code: str, attribute_code: str, code: str, db: psycopg.Connection = Depends(get_db)
+        parent_code: str, attribute_code: str, code: str, db: Annotated[DbConnection, Depends(get_db)]
     ) -> JSONResponse:
         row = db.execute(
-            f"SELECT * FROM {table} WHERE id = %s",
+            trusted_sql(f"SELECT * FROM {table} WHERE id = %s"),
             (f"{parent_code}:{attribute_code}:{code}",),
         ).fetchone()
         if not row:
@@ -1435,14 +1462,18 @@ def register_three_level_routes(parent_entity: str, table: str) -> None:
 
     @router.patch(f"{base_path}/{{code}}")
     async def patch_three_level_item(
-        parent_code: str, attribute_code: str, code: str, request: Request, db: psycopg.Connection = Depends(get_db)
+        parent_code: str,
+        attribute_code: str,
+        code: str,
+        request: Request,
+        db: Annotated[DbConnection, Depends(get_db)],
     ) -> Response:
         from urllib.parse import quote
 
         data = await safe_json_body(request)
         composite_id = f"{parent_code}:{attribute_code}:{code}"
         composite_parent_id = f"{parent_code}:{attribute_code}"
-        row = db.execute(f"SELECT * FROM {table} WHERE id = %s", (composite_id,)).fetchone()
+        row = db.execute(trusted_sql(f"SELECT * FROM {table} WHERE id = %s"), (composite_id,)).fetchone()
         if row:
             existing = _get_item_data_dict(row)
             data = apply_patch(existing, data)
@@ -1458,7 +1489,10 @@ def register_three_level_routes(parent_entity: str, table: str) -> None:
                 content={},
                 status_code=201,
                 headers={
-                    "Location": f"/api/rest/v1/{parent_entity}/{quote(parent_code)}/attributes/{quote(attribute_code)}/options/{quote(code)}"
+                    "Location": (
+                        f"/api/rest/v1/{parent_entity}/{quote(parent_code)}"
+                        f"/attributes/{quote(attribute_code)}/options/{quote(code)}"
+                    )
                 },
             )
         return Response(status_code=204)

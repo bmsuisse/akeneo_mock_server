@@ -1,12 +1,13 @@
 """Test to understand family attribute validation requirements"""
 
 from fastapi.testclient import TestClient
+
 from akeneo_mock_server.app import app
 
 client = TestClient(app)
 
 
-def test_product_update_with_attribute_not_in_family_should_fail():
+def test_product_update_with_attribute_not_in_family_should_fail() -> None:
     """A product update should fail if an attribute is not part of the product's family"""
     family_code = "test-family-1"
     attr_code_1 = "attr-in-family"
@@ -39,12 +40,10 @@ def test_product_update_with_attribute_not_in_family_should_fail():
         f"/api/rest/v1/products/{product_code}",
         json={"values": {attr_code_2: [{"data": "value for attr not in family", "locale": None, "scope": None}]}},
     )
-    print(f"Response status: {r.status_code}")
-    print(f"Response body: {r.text}")
     assert r.status_code == 422, f"Expected 422, got {r.status_code}: {r.text}"
 
 
-def test_products_uuid_update_with_attribute_not_in_family_should_fail():
+def test_products_uuid_update_with_attribute_not_in_family_should_fail() -> None:
     """A products-uuid update should fail if an attribute is not part of the product's family"""
     family_code = "test-family-2"
     attr_code_1 = "attr-in-family-2"
@@ -79,6 +78,4 @@ def test_products_uuid_update_with_attribute_not_in_family_should_fail():
         f"/api/rest/v1/products-uuid/{product_uuid}",
         json={"values": {attr_code_2: [{"data": "value for attr not in family", "locale": None, "scope": None}]}},
     )
-    print(f"Response status: {r.status_code}")
-    print(f"Response body: {r.text}")
     assert r.status_code == 422, f"Expected 422, got {r.status_code}: {r.text}"

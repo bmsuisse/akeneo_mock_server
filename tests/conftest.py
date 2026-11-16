@@ -1,7 +1,19 @@
+from __future__ import annotations
+
+import logging
 import os
 import time
-import pytest
+from collections.abc import Iterator
+from typing import TYPE_CHECKING
+
 import psycopg
+import pytest
+from psycopg import sql
+
+if TYPE_CHECKING:
+    from docker.models.containers import Container
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_DB_URL = "postgresql://akeneo:akeneo@localhost:54327/akeneo?connect_timeout=10"
 
@@ -15,7 +27,7 @@ def _try_connect(db_url: str) -> bool:
         return False
 
 
-def _start_docker_container() -> tuple[object, str]:
+def _start_docker_container() -> tuple[Container, str]:
     import docker
     from docker.errors import DockerException, NotFound
 
@@ -33,7 +45,7 @@ def _start_docker_container() -> tuple[object, str]:
     except NotFound:
         pass
 
-    print("\nStarting PostgreSQL container...")
+    logger.info("Starting PostgreSQL container...")
     try:
         container = client.containers.run(
             "postgres:15",
@@ -59,7 +71,7 @@ def _start_docker_container() -> tuple[object, str]:
     retries = 30
     while retries > 0:
         if _try_connect(db_url):
-            print(f"PostgreSQL is ready on port {host_port}!")
+            logger.info("PostgreSQL is ready on port %s!", host_port)
             return container, db_url
         retries -= 1
         time.sleep(1)
@@ -69,7 +81,7 @@ def _start_docker_container() -> tuple[object, str]:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def postgres_container():
+def postgres_container() -> Iterator[Container | None]:
     # Use an already-running postgres if available (e.g. CI or local install)
     existing_url = os.environ.get("AKENEO_DATABASE_URL", _DEFAULT_DB_URL)
     if "connect_timeout" not in existing_url:
@@ -84,12 +96,12 @@ def postgres_container():
     try:
         yield container
     finally:
-        print("\nStopping PostgreSQL container...")
+        logger.info("Stopping PostgreSQL container...")
         container.stop()
 
 
 @pytest.fixture(scope="session", autouse=True)
-def init_db_once(postgres_container):
+def init_db_once(postgres_container: Container | None) -> None:
     """Create tables/indexes once per session to avoid per-test DDL lock contention."""
     from akeneo_mock_server.database import init_db
 
@@ -97,8 +109,8 @@ def init_db_once(postgres_container):
 
 
 @pytest.fixture(autouse=True)
-def fresh_db(init_db_once):
-    from akeneo_mock_server.database import get_db_url, MODELS, SUB_MODELS
+def fresh_db(init_db_once: None) -> Iterator[None]:
+    from akeneo_mock_server.database import MODELS, SUB_MODELS, get_db_url
 
     db_url = get_db_url()
     conn = psycopg.connect(db_url)
@@ -115,7 +127,7 @@ def fresh_db(init_db_once):
         for table in tables:
             cursor.execute("SAVEPOINT trunc")
             try:
-                cursor.execute(f'TRUNCATE TABLE "{table}" CASCADE')
+                cursor.execute(sql.SQL("TRUNCATE TABLE {} CASCADE").format(sql.Identifier(table)))
                 cursor.execute("RELEASE SAVEPOINT trunc")
             except psycopg.errors.UndefinedTable:
                 cursor.execute("ROLLBACK TO SAVEPOINT trunc")

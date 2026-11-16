@@ -19,26 +19,26 @@ Tolerance policy
 ----------------
 Three classes of "known-acceptable" responses are tolerated and do not fail the suite:
 
-1. **405 Method Not Allowed** – the mock server only implements a subset of the
+1. **405 Method Not Allowed** - the mock server only implements a subset of the
    full Akeneo REST API.  Endpoints that are in the spec but not yet implemented
    return 405.  We skip status_code_conformance for these so the suite stays
    green while we incrementally add routes.
 
-2. **204 No Content on PATCH/DELETE without a Content-Type header** – correct
+2. **204 No Content on PATCH/DELETE without a Content-Type header** - correct
    HTTP behaviour (RFC 7230 says no body → no Content-Type), but the Akeneo
    OpenAPI spec inconsistently declares a 200/application/json response for
    several mutation endpoints.  We skip content_type_conformance for 204 bodies.
 
-3. **422 Unprocessable Entity** – FastAPI validates query / body parameters
+3. **422 Unprocessable Entity** - FastAPI validates query / body parameters
    strictly and returns 422 when schemathesis sends deliberately malformed
    inputs (e.g. ``with_count=null&with_count=null``).  The Akeneo spec does not
    document 422, so we accept it without raising a status-code failure.
 
-4. **409 Conflict** – POST endpoints return 409 when schemathesis generates a
+4. **409 Conflict** - POST endpoints return 409 when schemathesis generates a
    request that creates a resource whose code already exists in the database.
-   This is correct server behaviour but the spec doesn’t document 409.
+   This is correct server behaviour but the spec doesn't document 409.
 
-5. **415 Unsupported Media Type** – returned when schemathesis sends a request
+5. **415 Unsupported Media Type** - returned when schemathesis sends a request
    without a JSON body (e.g. multipart form data).  Not in the Akeneo spec.
 
 ``response_schema_conformance`` is **not** applied by default.  The mock server
@@ -60,9 +60,11 @@ Note on response_schema_conformance
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from pathlib import Path
 
 import schemathesis
+from hypothesis import HealthCheck, settings
 from schemathesis.checks import CHECKS, load_all_checks
 from schemathesis.config import GenerationConfig, ProjectConfig, ProjectsConfig
 
@@ -143,7 +145,9 @@ schema = schemathesis.openapi.from_asgi(
 schema.raw_schema = schemathesis.openapi.from_path(SCHEMA_PATH).raw_schema
 
 
-from hypothesis import settings, HealthCheck  # noqa: E402
+def _validate(case: schemathesis.Case, response: schemathesis.Response, checks: Sequence[object]) -> None:
+    # schemathesis types CHECKS.get_by_names() wider than validate_response() accepts
+    case.validate_response(response, checks=list(checks))  # ty: ignore[invalid-argument-type]
 
 
 @schema.parametrize()
@@ -164,12 +168,12 @@ def test_api_contract(case: schemathesis.Case) -> None:
 
     # Tolerated status codes — see module docstring for justification.
     if response.status_code in _TOLERATED_STATUS_CODES:
-        case.validate_response(response, checks=_checks_server_error_only)
+        _validate(case, response, _checks_server_error_only)
         return
 
     # Download endpoints return binary data — skip content-type check.
     if case.operation.path in _DOWNLOAD_PATHS:
-        case.validate_response(response, checks=_checks_server_error_only)
+        _validate(case, response, _checks_server_error_only)
         return
 
-    case.validate_response(response, checks=_checks_no_schema)
+    _validate(case, response, _checks_no_schema)

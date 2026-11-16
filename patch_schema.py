@@ -1,6 +1,7 @@
 """Patch the Akeneo OpenAPI spec to be compatible with our mock server."""
 
 import json
+from pathlib import Path
 
 
 def _fix_labels_in_place(labels: dict) -> None:
@@ -16,7 +17,7 @@ def _make_nullable(field: dict) -> None:
     if curr and curr != "null":
         types = curr if isinstance(curr, list) else [curr]
         if "null" not in types:
-            field["type"] = types + ["null"]  # type: ignore[assignment]
+            field["type"] = [*types, "null"]  # type: ignore[assignment]
 
 
 def _walk(obj: object) -> None:
@@ -37,7 +38,7 @@ def _walk(obj: object) -> None:
                     fs["x-nullable"] = True
 
         # Make fields that we know return null (but spec says not nullable), nullable
-        NULLABLE_STRING_FIELDS = {
+        nullable_string_fields = {
             "decimal_places_strategy",
             "validation_rule",
             "validation_regexp",
@@ -59,14 +60,14 @@ def _walk(obj: object) -> None:
             "updated",
             "created",  # date fields that can be null in our seed data
         }
-        NULLABLE_NUMBER_FIELDS = {
+        nullable_number_fields = {
             "decimal_places",
             "number_min",
             "number_max",
             "max_characters",
             "sort_order",
         }
-        NULLABLE_BOOL_FIELDS = {
+        nullable_bool_fields = {
             "decimals_allowed",
             "negative_allowed",
             "wysiwyg_enabled",
@@ -78,35 +79,35 @@ def _walk(obj: object) -> None:
             "is_two_way",
             "is_quantified",
         }
-        for field_name in NULLABLE_STRING_FIELDS:
+        for field_name in nullable_string_fields:
             if field_name in obj:
                 fs = obj[field_name]
                 if isinstance(fs, dict) and fs.get("type") == "string":
                     _make_nullable(fs)
 
-        for field_name in NULLABLE_NUMBER_FIELDS:
+        for field_name in nullable_number_fields:
             if field_name in obj:
                 fs = obj[field_name]
                 if isinstance(fs, dict) and fs.get("type") in ("number", "integer"):
                     _make_nullable(fs)
 
-        for field_name in NULLABLE_BOOL_FIELDS:
+        for field_name in nullable_bool_fields:
             if field_name in obj:
                 fs = obj[field_name]
                 if isinstance(fs, dict) and fs.get("type") == "boolean":
                     _make_nullable(fs)
 
         # Fields that spec says 'object' but can be array in seed data
-        FLEXIBLE_OBJECT_FIELDS = {"quality_scores", "completenesses"}
+        flexible_object_fields = {"quality_scores", "completenesses"}
         # Fields that can be any type due to schemathesis-injected data
-        FLEXIBLE_ANY_FIELDS = {"position"}
-        for field_name in FLEXIBLE_OBJECT_FIELDS:
+        flexible_any_fields = {"position"}
+        for field_name in flexible_object_fields:
             if field_name in obj:
                 fs = obj[field_name]
                 if isinstance(fs, dict) and fs.get("type") == "object":
                     fs["type"] = ["object", "array"]  # type: ignore[assignment]
                     fs["additionalProperties"] = True
-        for field_name in FLEXIBLE_ANY_FIELDS:
+        for field_name in flexible_any_fields:
             if field_name in obj:
                 fs = obj[field_name]
                 if isinstance(fs, dict):
@@ -197,7 +198,7 @@ def _fix_transformations_operations(schema_obj: dict) -> None:
 
 
 def patch_schema() -> None:
-    with open("pim-api-docs/content/swagger/akeneo-web-api.json", "r") as f:
+    with Path("pim-api-docs/content/swagger/akeneo-web-api.json").open() as f:
         schema = json.load(f)
 
     definitions = schema.get("definitions", {})
@@ -223,7 +224,7 @@ def patch_schema() -> None:
         if not isinstance(path_item, dict):
             continue
         if "categories" in path or "product" in path:
-            for _method, operation in path_item.items():
+            for operation in path_item.values():
                 if not isinstance(operation, dict):
                     continue
                 resp200 = operation.get("responses", {}).get("200", {})
@@ -234,7 +235,7 @@ def patch_schema() -> None:
     for _path, path_item in schema.get("paths", {}).items():
         if not isinstance(path_item, dict):
             continue
-        for _method, operation in path_item.items():
+        for operation in path_item.values():
             if not isinstance(operation, dict):
                 continue
             resp200 = operation.get("responses", {}).get("200", {})
@@ -246,7 +247,7 @@ def patch_schema() -> None:
     for _path, path_item in schema.get("paths", {}).items():
         if not isinstance(path_item, dict):
             continue
-        for _method, operation in path_item.items():
+        for operation in path_item.values():
             if not isinstance(operation, dict) or "responses" not in operation:
                 continue
             responses = operation["responses"]
@@ -260,7 +261,7 @@ def patch_schema() -> None:
             continue
         if "asset-famil" not in _path:
             continue
-        for _method, operation in path_item.items():
+        for operation in path_item.values():
             if not isinstance(operation, dict):
                 continue
             resp = operation.get("responses", {}).get("200", {}).get("schema", {})
@@ -327,7 +328,7 @@ def patch_schema() -> None:
     for _path, path_item in schema.get("paths", {}).items():
         if not isinstance(path_item, dict):
             continue
-        for method, operation in path_item.items():
+        for operation in path_item.values():
             if not isinstance(operation, dict) or "responses" not in operation:
                 continue
             responses = operation["responses"]
@@ -343,7 +344,7 @@ def patch_schema() -> None:
                 if code not in responses:
                     responses[code] = {"description": desc}
 
-    with open("pim-api-docs/content/swagger/akeneo-web-api.json", "w") as f:
+    with Path("pim-api-docs/content/swagger/akeneo-web-api.json").open("w") as f:
         json.dump(schema, f, indent=2)
     print("Schema patched successfully.")
 

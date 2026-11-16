@@ -1,24 +1,35 @@
-from contextvars import ContextVar
-import psycopg
-from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
-from typing import Any, Generator
-from pydantic import BaseModel, Field, model_validator
-from pathlib import Path
-import time
+import logging
 import os
+import time
+from collections.abc import Generator
+from contextvars import ContextVar
+from pathlib import Path
+from typing import Any, LiteralString, cast
 
+import psycopg
 from psycopg import sql
+from psycopg.rows import DictRow, dict_row
+from psycopg_pool import ConnectionPool
+from pydantic import BaseModel, Field, model_validator
+
+logger = logging.getLogger(__name__)
+
+DbConnection = psycopg.Connection[DictRow]
 
 SCHEMA_SQL_PATH = Path(__file__).with_name("schema.sql")
-_db_pools: dict[str, ConnectionPool] = {}
+_db_pools: dict[str, ConnectionPool[DbConnection]] = {}
 _db_pool_urls: dict[str, str] = {}
 _known_databases: set[str] = set()
+
+
+def trusted_sql(query: str) -> sql.SQL:
+    return sql.SQL(cast(LiteralString, query))
+
 
 db_name_var: ContextVar[str | None] = ContextVar("db_name", default=None)
 
 
-def get_db_url():
+def get_db_url() -> str:
     base_url = os.environ.get("AKENEO_DATABASE_URL", "postgresql://akeneo:akeneo@localhost:54327/akeneo")
     db_name = db_name_var.get()
 
@@ -33,7 +44,7 @@ def get_db_url():
     return base_url
 
 
-def get_admin_url():
+def get_admin_url() -> str:
     base_url = os.environ.get("AKENEO_DATABASE_URL", "postgresql://akeneo:akeneo@localhost:54327/akeneo")
     if "/" in base_url:
         prm_part = base_url.split("?")[1] if "?" in base_url else ""
@@ -42,37 +53,33 @@ def get_admin_url():
     return base_url
 
 
-def _get_db_name():
+def _get_db_name() -> str:
     db_name = db_name_var.get()
     if db_name is None:
         db_name = get_db_url().rsplit("/", 1)[-1].split("?")[0]
     return db_name
 
 
-def ensure_db_exists(db_name: str):
+def ensure_db_exists(db_name: str) -> None:
     if db_name in _known_databases:
         return
 
     admin_url = get_admin_url()
-    with psycopg.connect(admin_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
-            if not cur.fetchone():
-                cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name)))
-                # Initialize it
-                token = db_name_var.set(db_name)
-                try:
-                    init_db()
-                finally:
-                    db_name_var.reset(token)
+    with psycopg.connect(admin_url, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
+        if not cur.fetchone():
+            cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name)))
+            # Initialize it
+            token = db_name_var.set(db_name)
+            try:
+                init_db()
+            finally:
+                db_name_var.reset(token)
 
     _known_databases.add(db_name)
 
 
-def get_db_pool() -> ConnectionPool:
-    global _db_pools
-    global _db_pool_urls
-
+def get_db_pool() -> ConnectionPool[DbConnection]:
     db_name = _get_db_name()
     db_url = get_db_url()
 
@@ -82,7 +89,7 @@ def get_db_pool() -> ConnectionPool:
     if db_name in _db_pools:
         _db_pools[db_name].close()
 
-    pool = ConnectionPool(
+    pool = ConnectionPool[DbConnection](
         conninfo=db_url,
         min_size=1,
         max_size=20,
@@ -95,9 +102,6 @@ def get_db_pool() -> ConnectionPool:
 
 
 def close_db_pool() -> None:
-    global _db_pools
-    global _db_pool_urls
-
     for pool in _db_pools.values():
         pool.close()
     _db_pools.clear()
@@ -106,34 +110,33 @@ def close_db_pool() -> None:
 
 def destroy_all_databases() -> list[str]:
     """Drops all databases starting with 'akeneo' and clears internal state."""
-    global _known_databases
-
     close_db_pool()
     admin_url = get_admin_url()
     dropped = []
 
-    with psycopg.connect(admin_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            # Find all databases starting with 'akeneo'
-            cur.execute("SELECT datname FROM pg_database WHERE datname LIKE 'akeneo%'")
-            databases = [row["datname"] for row in cur.fetchall()]
+    with (
+        psycopg.Connection[DictRow].connect(admin_url, autocommit=True, row_factory=dict_row) as conn,
+        conn.cursor() as cur,
+    ):
+        # Find all databases starting with 'akeneo'
+        cur.execute("SELECT datname FROM pg_database WHERE datname LIKE 'akeneo%'")
+        databases = [row["datname"] for row in cur.fetchall()]
 
-            for db in databases:
-                # Terminate active connections
-                cur.execute(
-                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s AND pid <> pg_backend_pid()",
-                    (db,),
-                )
-                cur.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(db)))
-                dropped.append(db)
+        for db in databases:
+            # Terminate active connections
+            cur.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s AND pid <> pg_backend_pid()",
+                (db,),
+            )
+            cur.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(db)))
+            dropped.append(db)
 
     _known_databases.clear()
     return dropped
 
 
-def get_connection():
-    conn = psycopg.connect(get_db_url(), row_factory=dict_row)
-    return conn
+def get_connection() -> DbConnection:
+    return psycopg.Connection[DictRow].connect(get_db_url(), row_factory=dict_row)
 
 
 class EntityBase(BaseModel):
@@ -462,7 +465,7 @@ SUB_MODELS = {
 }
 
 
-def init_db():
+def init_db() -> None:
     retries = 10
     conn = None
     while retries > 0:
@@ -470,7 +473,7 @@ def init_db():
             conn = get_connection()
             break
         except Exception as e:
-            print(f"PostgreSQL not ready, retrying ({retries} left)... {e}")
+            logger.warning("PostgreSQL not ready, retrying (%s left)... %s", retries, e)
             retries -= 1
             time.sleep(2)
 
@@ -481,34 +484,34 @@ def init_db():
     for statement in statements:
         normalized_statement = statement.strip()
         if normalized_statement:
-            conn.execute(normalized_statement)
+            conn.execute(trusted_sql(normalized_statement))
 
     conn.commit()
     conn.close()
 
 
-def get_db() -> Generator[psycopg.Connection, None, None]:
+def get_db() -> Generator[DbConnection, None, None]:
     with get_db_pool().connection() as conn:
         yield conn
 
 
 # Helper for Session-like behavior if needed, but we'll use raw connections.
 class SessionShim:
-    def __init__(self, conn: psycopg.Connection):
+    def __init__(self, conn: DbConnection) -> None:
         self.conn = conn
 
-    def exec(self, query: Any):
+    def exec(self, query: Any) -> None:
         # This will be updated to handle sqlglot queries
         pass
 
-    def add(self, item: Any):
+    def add(self, item: Any) -> None:
         pass
 
-    def commit(self):
+    def commit(self) -> None:
         self.conn.commit()
 
-    def rollback(self):
+    def rollback(self) -> None:
         self.conn.rollback()
 
-    def close(self):
+    def close(self) -> None:
         self.conn.close()

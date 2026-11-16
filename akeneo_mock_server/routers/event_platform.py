@@ -1,12 +1,11 @@
-from typing import Any
+from typing import Annotated, Any
 
-import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from psycopg.types.json import Jsonb
 
 from akeneo_mock_server.common import safe_json_body, safe_loads
-from akeneo_mock_server.database import get_db
+from akeneo_mock_server.database import DbConnection, get_db
 from akeneo_mock_server.events import (
     EVENT_SAMPLES,
     PLATFORM_EVENT_TYPES,
@@ -32,7 +31,7 @@ def present_subscription(data: dict[str, Any]) -> dict[str, Any]:
     config = data.get("config")
     if not isinstance(config, dict) or not isinstance(config.get("headers"), dict):
         return data
-    redacted_headers = {name: REDACTED for name in config["headers"]}
+    redacted_headers = dict.fromkeys(config["headers"], REDACTED)
     return {**data, "config": {**config, "headers": redacted_headers}}
 
 
@@ -52,13 +51,13 @@ def with_subscription_defaults(data: dict[str, Any], subscriber_id: str) -> dict
 
 
 @router.get("/subscribers")
-def get_subscribers(db: psycopg.Connection = Depends(get_db)) -> dict[str, list[dict[str, Any]]]:
+def get_subscribers(db: Annotated[DbConnection, Depends(get_db)]) -> dict[str, list[dict[str, Any]]]:
     rows = db.execute("SELECT * FROM subscribers").fetchall()
     return {"items": [safe_loads(row["data"]) for row in rows]}
 
 
 @router.get("/subscribers/{subscriber_id}")
-def get_subscriber(subscriber_id: str, db: psycopg.Connection = Depends(get_db)) -> dict[str, Any]:
+def get_subscriber(subscriber_id: str, db: Annotated[DbConnection, Depends(get_db)]) -> dict[str, Any]:
     row = db.execute("SELECT * FROM subscribers WHERE id = %s", (subscriber_id,)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Subscriber not found")
@@ -66,7 +65,7 @@ def get_subscriber(subscriber_id: str, db: psycopg.Connection = Depends(get_db))
 
 
 @router.post("/subscribers", status_code=status.HTTP_201_CREATED)
-async def create_subscriber(request: Request, db: psycopg.Connection = Depends(get_db)) -> JSONResponse:
+async def create_subscriber(request: Request, db: Annotated[DbConnection, Depends(get_db)]) -> JSONResponse:
     data = await safe_json_body(request)
     subscriber_id = data.get("id")
     if not isinstance(subscriber_id, str) or not subscriber_id:
@@ -85,7 +84,9 @@ async def create_subscriber(request: Request, db: psycopg.Connection = Depends(g
 
 
 @router.patch("/subscribers/{subscriber_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def patch_subscriber(subscriber_id: str, request: Request, db: psycopg.Connection = Depends(get_db)) -> Response:
+async def patch_subscriber(
+    subscriber_id: str, request: Request, db: Annotated[DbConnection, Depends(get_db)]
+) -> Response:
     data = await safe_json_body(request)
     row = db.execute("SELECT * FROM subscribers WHERE id = %s", (subscriber_id,)).fetchone()
     if row is None:
@@ -100,7 +101,7 @@ async def patch_subscriber(subscriber_id: str, request: Request, db: psycopg.Con
 
 
 @router.delete("/subscribers/{subscriber_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_subscriber(subscriber_id: str, db: psycopg.Connection = Depends(get_db)) -> Response:
+def delete_subscriber(subscriber_id: str, db: Annotated[DbConnection, Depends(get_db)]) -> Response:
     if not db.execute("SELECT 1 FROM subscribers WHERE id = %s", (subscriber_id,)).fetchone():
         raise HTTPException(status_code=404, detail="Subscriber not found")
     db.execute("DELETE FROM subscribers WHERE id = %s", (subscriber_id,))
@@ -109,14 +110,16 @@ def delete_subscriber(subscriber_id: str, db: psycopg.Connection = Depends(get_d
 
 
 @router.get("/subscribers/{subscriber_id}/subscriptions")
-def get_subscriptions(subscriber_id: str, db: psycopg.Connection = Depends(get_db)) -> dict[str, list[dict[str, Any]]]:
+def get_subscriptions(
+    subscriber_id: str, db: Annotated[DbConnection, Depends(get_db)]
+) -> dict[str, list[dict[str, Any]]]:
     rows = db.execute("SELECT * FROM subscriptions WHERE parent_id = %s", (subscriber_id,)).fetchall()
     return {"items": [present_subscription(safe_loads(row["data"])) for row in rows]}
 
 
 @router.get("/subscribers/{subscriber_id}/subscriptions/{subscription_id}")
 def get_subscription(
-    subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)
+    subscriber_id: str, subscription_id: str, db: Annotated[DbConnection, Depends(get_db)]
 ) -> dict[str, Any]:
     row = db.execute(
         "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
@@ -131,7 +134,7 @@ def get_subscription(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_subscription(
-    subscriber_id: str, request: Request, db: psycopg.Connection = Depends(get_db)
+    subscriber_id: str, request: Request, db: Annotated[DbConnection, Depends(get_db)]
 ) -> JSONResponse:
     data = await safe_json_body(request)
     _validate_subscription_payload(data)
@@ -171,7 +174,7 @@ async def patch_subscription(
     subscriber_id: str,
     subscription_id: str,
     request: Request,
-    db: psycopg.Connection = Depends(get_db),
+    db: Annotated[DbConnection, Depends(get_db)],
 ) -> Response:
     data = await safe_json_body(request)
     _validate_subscription_payload(data)
@@ -201,7 +204,7 @@ async def patch_subscription(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_subscription(
-    subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)
+    subscriber_id: str, subscription_id: str, db: Annotated[DbConnection, Depends(get_db)]
 ) -> Response:
     row = db.execute(
         "SELECT 1 FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
@@ -214,7 +217,7 @@ def delete_subscription(
 
 
 def _transition_subscription(
-    db: psycopg.Connection, subscriber_id: str, subscription_id: str, required: str, target: str
+    db: DbConnection, subscriber_id: str, subscription_id: str, required: str, target: str
 ) -> JSONResponse:
     row = db.execute(
         "SELECT * FROM subscriptions WHERE parent_id = %s AND id = %s FOR UPDATE", (subscriber_id, subscription_id)
@@ -233,14 +236,14 @@ def _transition_subscription(
 
 @router.post("/subscribers/{subscriber_id}/subscriptions/{subscription_id}/suspend")
 def suspend_subscription(
-    subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)
+    subscriber_id: str, subscription_id: str, db: Annotated[DbConnection, Depends(get_db)]
 ) -> JSONResponse:
     return _transition_subscription(db, subscriber_id, subscription_id, "active", "suspended")
 
 
 @router.post("/subscribers/{subscriber_id}/subscriptions/{subscription_id}/resume")
 def resume_subscription(
-    subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)
+    subscriber_id: str, subscription_id: str, db: Annotated[DbConnection, Depends(get_db)]
 ) -> JSONResponse:
     return _transition_subscription(db, subscriber_id, subscription_id, "suspended", "active")
 

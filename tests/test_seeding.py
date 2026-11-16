@@ -1,7 +1,10 @@
 import json
-import pytest
+from collections.abc import Iterator
+
 import psycopg
+import pytest
 from fastapi.testclient import TestClient
+
 from akeneo_mock_server.app import app
 from akeneo_mock_server.database import get_db_url
 
@@ -37,13 +40,13 @@ PRODUCTS = [
 
 
 @pytest.fixture
-def db_conn():
+def db_conn() -> Iterator[psycopg.Connection]:
     conn = psycopg.connect(get_db_url())
     yield conn
     conn.close()
 
 
-def test_seed_flow_categories(db_conn):
+def test_seed_flow_categories(db_conn: psycopg.Connection) -> None:
     for category in CATEGORIES:
         code = category["code"]
         # Create
@@ -63,7 +66,7 @@ def test_seed_flow_categories(db_conn):
             assert row[0] == code
 
 
-def test_seed_flow_families(db_conn):
+def test_seed_flow_families(db_conn: psycopg.Connection) -> None:
     for family in FAMILIES:
         code = family["code"]
         res = client.post("/api/rest/v1/families", json=family)
@@ -80,7 +83,7 @@ def test_seed_flow_families(db_conn):
             assert row[0] == code
 
 
-def test_seed_flow_attributes(db_conn):
+def test_seed_flow_attributes(db_conn: psycopg.Connection) -> None:
     for attr in ATTRIBUTES:
         code = attr["code"]
         res = client.post("/api/rest/v1/attributes", json=attr)
@@ -97,7 +100,7 @@ def test_seed_flow_attributes(db_conn):
             assert row[0] == code
 
 
-def test_seed_flow_products_ndjson(db_conn):
+def test_seed_flow_products_ndjson(db_conn: psycopg.Connection) -> None:
     # First ensure family and category exist for the product
     client.post("/api/rest/v1/categories", json={"code": "flooring"})
     client.post("/api/rest/v1/families", json={"code": "flooring"})

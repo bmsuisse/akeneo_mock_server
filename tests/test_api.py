@@ -1,8 +1,9 @@
 import json
+from typing import Any, NoReturn
 
-import pytest
 import psycopg
 import psycopg.errors
+import pytest
 from fastapi.testclient import TestClient
 
 from akeneo_mock_server.app import app
@@ -30,10 +31,10 @@ ENTITY_TEST_DATA = {
 client = TestClient(app)
 
 
-def test_psycopg_undefined_table_returns_500_with_details():
+def test_psycopg_undefined_table_returns_500_with_details() -> None:
     no_raise_client = TestClient(app, raise_server_exceptions=False)
 
-    def broken_db_dependency():
+    def broken_db_dependency() -> NoReturn:
         raise psycopg.errors.UndefinedTable('relation "products" does not exist')
 
     app.dependency_overrides[get_db] = broken_db_dependency
@@ -50,13 +51,13 @@ def test_psycopg_undefined_table_returns_500_with_details():
     assert "does not exist" in payload["details"]["exception_message"]
 
 
-def test_root():
+def test_root() -> None:
     response = client.get("/api/rest/v1")
     assert response.status_code == 200
     assert "authentication" in response.json()
 
 
-def test_ndjson_patch_products():
+def test_ndjson_patch_products() -> None:
     """Verify that multiple products can be patched via NDJSON (non-standard Akeneo but common)."""
     ndjson_data = '{"identifier": "p1", "enabled": true}\n{"identifier": "p2", "enabled": false}\n'
     response = client.patch(
@@ -68,7 +69,7 @@ def test_ndjson_patch_products():
 
 
 @pytest.mark.parametrize("entity_name, config", MODELS.items())
-def test_generic_entity_endpoints(entity_name, config):
+def test_generic_entity_endpoints(entity_name: str, config: dict[str, Any]) -> None:
     pk_field = config["pk_field"]
     test_code = f"test-{entity_name}-1"
 
@@ -110,7 +111,7 @@ def test_generic_entity_endpoints(entity_name, config):
 
 
 @pytest.mark.parametrize("sub_entity_path, config", SUB_MODELS.items())
-def test_generic_sub_entity_endpoints(sub_entity_path, config):
+def test_generic_sub_entity_endpoints(sub_entity_path: str, config: dict[str, Any]) -> None:
     if "parent_entity" not in config:
         pytest.skip("Not a sub-entity")
 
@@ -129,7 +130,6 @@ def test_generic_sub_entity_endpoints(sub_entity_path, config):
                 f"/api/rest/v1/{parent_entity}",
                 json={parent_pk: parent_code, "type": "pim_catalog_simpleselect"},
             )
-            print("attribute parent create response:", parent_response.status_code, parent_response.text)
             assert parent_response.status_code == 201, (
                 f"parent create failed with {parent_response.status_code}: {parent_response.text}"
             )
@@ -139,8 +139,6 @@ def test_generic_sub_entity_endpoints(sub_entity_path, config):
     # Create
     create_data = {pk_field: test_code, "updated": False}
     response = client.post(base_path, json=create_data)
-    if sub_entity_path == "attributes/attribute-options":
-        print("attribute option create response:", response.status_code, response.text)
     assert response.status_code == 201, f"create failed with {response.status_code}: {response.text}"
     assert response.headers["Location"] == f"{base_path}/{test_code}"
 
@@ -170,7 +168,7 @@ def test_generic_sub_entity_endpoints(sub_entity_path, config):
     assert any(item[pk_field] == test_code for item in items)
 
 
-def test_media_endpoints():
+def test_media_endpoints() -> None:
     # Category Media
     res = client.post("/api/rest/v1/category-media-files")
     assert res.status_code == 201
@@ -182,7 +180,7 @@ def test_media_endpoints():
     assert b"mock-binary-content" in res.content
 
 
-def test_patch_attribute_option_requires_select_attribute_type():
+def test_patch_attribute_option_requires_select_attribute_type() -> None:
     valid_attribute_code = "attr-select-type"
     invalid_attribute_code = "attr-text-type"
     option_code = "black"
@@ -197,7 +195,6 @@ def test_patch_attribute_option_requires_select_attribute_type():
         f"/api/rest/v1/attributes/{valid_attribute_code}/options/{option_code}",
         json={"labels": {"en_US": "Black"}},
     )
-    print("patch valid option response:", patch_valid_option.status_code, patch_valid_option.text)
     assert patch_valid_option.status_code == 204, (
         f"valid option patch failed with {patch_valid_option.status_code}: {patch_valid_option.text}"
     )
@@ -212,14 +209,13 @@ def test_patch_attribute_option_requires_select_attribute_type():
         f"/api/rest/v1/attributes/{invalid_attribute_code}/options/{option_code}",
         json={"labels": {"en_US": "Black"}},
     )
-    print("patch invalid option response:", patch_invalid_option.status_code, patch_invalid_option.text)
     assert patch_invalid_option.status_code == 422, (
         f"invalid option patch failed with {patch_invalid_option.status_code}: {patch_invalid_option.text}"
     )
     assert "does not support options" in patch_invalid_option.json()["detail"]
 
 
-def test_patch_attribute_options_collection_content_type():
+def test_patch_attribute_options_collection_content_type() -> None:
     attribute_code = "attr-select-collection"
 
     create_attribute = client.post(
@@ -252,7 +248,7 @@ def test_patch_attribute_options_collection_content_type():
     assert black_option_response.json()["labels"] == {"en_US": "Black"}
 
 
-def test_get_attribute_returns_table_configuration():
+def test_get_attribute_returns_table_configuration() -> None:
     attribute_code = "attr-table-config"
     table_configuration = [
         {"code": "ingredient", "data_type": "select"},
@@ -277,7 +273,7 @@ def test_get_attribute_returns_table_configuration():
     assert payload["table_configuration"] == table_configuration
 
 
-def test_get_attribute_with_table_select_options():
+def test_get_attribute_with_table_select_options() -> None:
     attribute_code = "attr-table-with-options"
     table_configuration = [
         {
@@ -313,7 +309,7 @@ def test_get_attribute_with_table_select_options():
     assert payload["table_configuration"] == table_configuration
 
 
-def test_get_attribute_without_table_select_options():
+def test_get_attribute_without_table_select_options() -> None:
     attribute_code = "attr-table-without-options"
     table_configuration = [
         {
@@ -353,7 +349,7 @@ def test_get_attribute_without_table_select_options():
     assert "select_options" not in select_column["validations"]
 
 
-def test_ee_workflows():
+def test_ee_workflows() -> None:
     # Draft & Proposal
     res = client.get("/api/rest/v1/products/p1/draft")
     assert res.status_code == 200
@@ -364,19 +360,19 @@ def test_ee_workflows():
     assert "proposal/1" in res.headers["Location"]
 
 
-def test_jobs():
+def test_jobs() -> None:
     res = client.post("/api/rest/v1/jobs/export/my_export")
     assert res.status_code == 201
     assert "executions/1" in res.headers["Location"]
 
 
-def test_discovery():
+def test_discovery() -> None:
     res = client.get("/api/rest/v1")
     assert res.status_code == 200
     assert res.json()["host"] == "127.0.0.1:8000"
 
 
-def test_event_platform_webhooks():
+def test_event_platform_webhooks() -> None:
     # Subscriber
     subscriber_id = "sub1"
     res = client.post("/api/v1/subscribers", json={"id": subscriber_id, "url": "http://webhook.site/test"})
@@ -403,7 +399,7 @@ def test_event_platform_webhooks():
     assert res.status_code == 404
 
 
-def test_family_variant_axes_must_belong_to_family():
+def test_family_variant_axes_must_belong_to_family() -> None:
     family_code = "fv-test-family"
     attr_in = "fv-attr-in-family"
     attr_also_in = "fv-attr-also-in-family"
@@ -447,7 +443,7 @@ def test_family_variant_axes_must_belong_to_family():
     assert res.status_code == 201
 
 
-def test_family_variant_patch_axes_must_belong_to_family():
+def test_family_variant_patch_axes_must_belong_to_family() -> None:
     family_code = "fv-patch-test-family"
     attr_in = "fv-patch-attr-in"
     attr_out = "fv-patch-attr-out"
@@ -480,7 +476,7 @@ def test_family_variant_patch_axes_must_belong_to_family():
     assert res.status_code == 204
 
 
-def test_reference_entity_record_values_always_returned():
+def test_reference_entity_record_values_always_returned() -> None:
     entity_code = "ref-ent-values"
     record_code = "record-no-values"
 
@@ -498,7 +494,7 @@ def test_reference_entity_record_values_always_returned():
     assert payload["values"] == {}
 
 
-def test_reference_entity_record_values_stored_and_returned():
+def test_reference_entity_record_values_stored_and_returned() -> None:
     entity_code = "ref-ent-with-values"
     record_code = "kartell"
 
@@ -522,7 +518,7 @@ def test_reference_entity_record_values_stored_and_returned():
     assert payload["values"]["description"] == [{"locale": "en_US", "channel": None, "data": "Italian furniture"}]
 
 
-def test_reference_entity_record_values_patch_merges_locale():
+def test_reference_entity_record_values_patch_merges_locale() -> None:
     entity_code = "ref-ent-merge"
     record_code = "lexon"
 
@@ -559,7 +555,7 @@ def test_reference_entity_record_values_patch_merges_locale():
     assert payload["values"]["description"] == [{"locale": "en_US", "channel": None, "data": "A brand"}]
 
 
-def test_reference_entity_records_list_has_values():
+def test_reference_entity_records_list_has_values() -> None:
     entity_code = "ref-ent-list-values"
 
     client.post("/api/rest/v1/reference-entities", json={"code": entity_code})
@@ -578,7 +574,7 @@ def test_reference_entity_records_list_has_values():
         assert "label" in item["values"]
 
 
-def test_reference_entity_records_bulk_patch():
+def test_reference_entity_records_bulk_patch() -> None:
     entity_code = "ref-ent-bulk"
 
     client.post("/api/rest/v1/reference-entities", json={"code": entity_code})
@@ -603,7 +599,7 @@ def test_reference_entity_records_bulk_patch():
     assert res.json()["values"]["label"] == [{"locale": "en_US", "channel": None, "data": "A"}]
 
 
-def test_asset_family_attribute_options_crud():
+def test_asset_family_attribute_options_crud() -> None:
     family_code = "test-asset-family-opts"
     attribute_code = "size"
 
@@ -655,7 +651,7 @@ def test_asset_family_attribute_options_crud():
     assert not_found.status_code == 404
 
 
-def test_reference_entity_attribute_options_crud():
+def test_reference_entity_attribute_options_crud() -> None:
     entity_code = "test-ref-ent-attr-opts"
     attribute_code = "color"
 
@@ -694,7 +690,7 @@ def test_reference_entity_attribute_options_crud():
     assert not_found.status_code == 404
 
 
-def test_asset_family_attribute_options_scoped_by_family():
+def test_asset_family_attribute_options_scoped_by_family() -> None:
     family_a = "family-opts-a"
     family_b = "family-opts-b"
     attribute_code = "shared-attr"

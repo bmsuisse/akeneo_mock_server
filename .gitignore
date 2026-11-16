@@ -209,3 +209,7 @@ __marimo__/
 .claude/skills
 .claude/settings.local.json
 debug_*.py
+
+.worktrees/
+.claude/worktrees/
+.codegraph/
