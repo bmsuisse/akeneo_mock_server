@@ -25,10 +25,11 @@ test = [
 dev = [
   "uvicorn>=0.54.0",
   "pytest>=9.1.1",
-  "ruff>=0.17.1",
+  "ruff>=0.17.4",
   "schemathesis>=4.32.3",
   "pyright>=1.1.414",
   "skillup>=0.7.3",
+  "ty>=0.0.100",
 ]
 
 [tool.pyright]
