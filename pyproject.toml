@@ -45,14 +45,45 @@ reportAttributeAccessIssue = "none"
 reportReturnType = "none"
 
 [tool.ruff]
-line-length = 119
+line-length = 120
 indent-width = 4
 target-version = "py312"
+extend-exclude = ["*.md", ".worktrees", ".claude", "pim-api-docs"]
 
 [tool.ruff.format]
 indent-style = "space"
 quote-style = "double"
 line-ending = "auto"
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "I",   # pycodestyle, pyflakes, isort
+    "UP",            # pyupgrade - X | None, modern syntax
+    "B",             # bugbear - mutable defaults etc.
+    "ANN",           # full type annotations
+    "SIM", "C4",     # simplifiable code, needless comprehensions/casts
+    "PERF", "FURB",  # needless loops, manual list/dict building
+    "ASYNC",         # blocking calls inside async def
+    "FAST",          # FastAPI: Annotated deps, redundant response_model
+    "RUF",
+    "N",             # PEP 8 naming
+    "PTH",           # pathlib instead of os.path
+    "TID",           # absolute imports only, banned APIs
+    "RET", "PIE",    # consistent returns, misc simplifications
+    "A",             # no shadowing builtins
+    "T20",           # no print()
+    "LOG",           # logging API misuse
+    "DTZ",           # timezone-aware datetimes
+    "FLY",           # f-string instead of str.join on literals
+    "PLE", "PLW",    # pylint errors + warnings
+]
+ignore = ["ANN401"]  # `Any` is a warning via the ruff-warn-any prek hook, not an error
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ty.src]
+exclude = [".worktrees", ".claude", "pim-api-docs"]
 
 [tool.sqlfmt]
 line_length = 119
