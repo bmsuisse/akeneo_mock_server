@@ -17,6 +17,8 @@ from akeneo_mock_server.routers.oauth import router as oauth_router
 from akeneo_mock_server.routers.rest import router as rest_router
 from akeneo_mock_server.routers.root import router as root_router
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def app_lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -61,7 +63,7 @@ def create_app() -> FastAPI:
         try:
             return await call_next(request)
         except psycopg.errors.DataError as exc:
-            logging.error("Unhandled error escaped middleware: %s: %s", type(exc).__name__, exc)
+            logger.error("Unhandled error escaped middleware: %s: %s", type(exc).__name__, exc)
             return JSONResponse(
                 status_code=422,
                 content={
@@ -87,7 +89,7 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-        logging.error("Internal Error intercepted: %s: %s", type(exc).__name__, exc)
+        logger.error("Internal Error intercepted: %s: %s", type(exc).__name__, exc)
         return JSONResponse(
             status_code=500,
             content={"code": 500, "message": "Internal Server Error", "details": _build_internal_error_details(exc)},

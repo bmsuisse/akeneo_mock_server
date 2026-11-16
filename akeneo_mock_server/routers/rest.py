@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 import re
 from datetime import datetime
 from typing import Annotated, Any
@@ -33,6 +34,8 @@ from akeneo_mock_server.pagination import (
 )
 from akeneo_mock_server.schemas import EntityListQuery, GenericPayload, SearchProductsUuidQuery, SubEntityListQuery
 from akeneo_mock_server.search_filters import collect_filtered_items
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/rest/v1", tags=["rest"])
 
@@ -87,23 +90,21 @@ def _validate_payload(payload: dict[str, Any], model_class: Any | None = None, p
         try:
             return model_class.model_validate(payload).model_dump(mode="python", exclude_unset=True)
         except ValidationError as e:
-            import logging
-
-            logging.error(f"DEBUG: Validation error for model {model_class.__name__}: {e.errors()}")
-            raise HTTPException(status_code=422, detail=e.errors())
+            logger.error("DEBUG: Validation error for model %s: %s", model_class.__name__, e.errors())
+            raise HTTPException(status_code=422, detail=e.errors()) from e
         except Exception as e:
             raise e
     try:
         return GenericPayload.model_validate(payload).model_dump(mode="python")
     except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
+        raise HTTPException(status_code=422, detail=e.errors()) from e
 
 
 def _validate_complete_payload(payload: dict[str, Any], model_class: Any) -> dict[str, Any]:
     try:
         return model_class.model_validate(payload).model_dump(mode="python", exclude_unset=True)
     except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
+        raise HTTPException(status_code=422, detail=e.errors()) from e
 
 
 _ENTITIES_WITH_VALUES: frozenset[str] = frozenset(
@@ -541,8 +542,8 @@ def _parse_collection_payload(content_type: str, body: bytes, model_class: Any |
         if "application/json" in content_type:
             try:
                 parsed = json.loads(body)
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                raise HTTPException(status_code=415, detail="Invalid JSON or encoding")
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise HTTPException(status_code=415, detail="Invalid JSON or encoding") from exc
             if isinstance(parsed, list):
                 result: list[dict[str, Any]] = []
                 for item in parsed:
@@ -554,8 +555,8 @@ def _parse_collection_payload(content_type: str, body: bytes, model_class: Any |
             if isinstance(parsed, dict):
                 return [_validate_payload(parsed, model_class, partial=True)]
             return [{"_invalid": parsed}]
-    except UnicodeDecodeError:
-        raise HTTPException(status_code=415, detail="Invalid encoding")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=415, detail="Invalid encoding") from exc
 
     raise HTTPException(
         status_code=415,

@@ -33,7 +33,7 @@ async def status() -> dict[str, str]:
             cur.fetchone()
         return {"status": "ok", "database": _get_db_name()}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Database connection failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Database connection failed: {exc}") from exc
 
 
 @router.post("/ensure_db")
