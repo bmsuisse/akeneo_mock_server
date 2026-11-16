@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 from collections.abc import Generator
@@ -10,6 +11,8 @@ from psycopg import sql
 from psycopg.rows import DictRow, dict_row
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field, model_validator
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_SQL_PATH = Path(__file__).with_name("schema.sql")
 _db_pools: dict[str, ConnectionPool] = {}
@@ -469,7 +472,7 @@ def init_db() -> None:
             conn = get_connection()
             break
         except Exception as e:
-            print(f"PostgreSQL not ready, retrying ({retries} left)... {e}")
+            logger.warning("PostgreSQL not ready, retrying (%s left)... %s", retries, e)
             retries -= 1
             time.sleep(2)
 

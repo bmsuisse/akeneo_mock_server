@@ -1,9 +1,12 @@
+import logging
 import os
 import time
 from collections.abc import Iterator
 
 import psycopg
 import pytest
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_DB_URL = "postgresql://akeneo:akeneo@localhost:54327/akeneo?connect_timeout=10"
 
@@ -35,7 +38,7 @@ def _start_docker_container() -> tuple[object, str]:
     except NotFound:
         pass
 
-    print("\nStarting PostgreSQL container...")
+    logger.info("Starting PostgreSQL container...")
     try:
         container = client.containers.run(
             "postgres:15",
@@ -61,7 +64,7 @@ def _start_docker_container() -> tuple[object, str]:
     retries = 30
     while retries > 0:
         if _try_connect(db_url):
-            print(f"PostgreSQL is ready on port {host_port}!")
+            logger.info("PostgreSQL is ready on port %s!", host_port)
             return container, db_url
         retries -= 1
         time.sleep(1)
@@ -86,7 +89,7 @@ def postgres_container() -> Iterator[object | None]:
     try:
         yield container
     finally:
-        print("\nStopping PostgreSQL container...")
+        logger.info("Stopping PostgreSQL container...")
         container.stop()
 
 

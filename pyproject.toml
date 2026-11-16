@@ -79,6 +79,11 @@ select = [
 ]
 ignore = ["ANN401"]  # `Any` is a warning via the ruff-warn-any prek hook, not an error
 
+[tool.ruff.lint.per-file-ignores]
+"get_pr_build.py" = ["T20"]  # CLI script, stdout is its product
+"patch_schema.py" = ["T20"]  # CLI script, stdout is its product
+"seed_data.py" = ["T20"]  # CLI script, stdout is its product
+
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 

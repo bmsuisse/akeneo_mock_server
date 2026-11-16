@@ -130,7 +130,6 @@ def test_generic_sub_entity_endpoints(sub_entity_path: str, config: dict[str, An
                 f"/api/rest/v1/{parent_entity}",
                 json={parent_pk: parent_code, "type": "pim_catalog_simpleselect"},
             )
-            print("attribute parent create response:", parent_response.status_code, parent_response.text)
             assert parent_response.status_code == 201, (
                 f"parent create failed with {parent_response.status_code}: {parent_response.text}"
             )
@@ -140,8 +139,6 @@ def test_generic_sub_entity_endpoints(sub_entity_path: str, config: dict[str, An
     # Create
     create_data = {pk_field: test_code, "updated": False}
     response = client.post(base_path, json=create_data)
-    if sub_entity_path == "attributes/attribute-options":
-        print("attribute option create response:", response.status_code, response.text)
     assert response.status_code == 201, f"create failed with {response.status_code}: {response.text}"
     assert response.headers["Location"] == f"{base_path}/{test_code}"
 
@@ -198,7 +195,6 @@ def test_patch_attribute_option_requires_select_attribute_type() -> None:
         f"/api/rest/v1/attributes/{valid_attribute_code}/options/{option_code}",
         json={"labels": {"en_US": "Black"}},
     )
-    print("patch valid option response:", patch_valid_option.status_code, patch_valid_option.text)
     assert patch_valid_option.status_code == 204, (
         f"valid option patch failed with {patch_valid_option.status_code}: {patch_valid_option.text}"
     )
@@ -213,7 +209,6 @@ def test_patch_attribute_option_requires_select_attribute_type() -> None:
         f"/api/rest/v1/attributes/{invalid_attribute_code}/options/{option_code}",
         json={"labels": {"en_US": "Black"}},
     )
-    print("patch invalid option response:", patch_invalid_option.status_code, patch_invalid_option.text)
     assert patch_invalid_option.status_code == 422, (
         f"invalid option patch failed with {patch_invalid_option.status_code}: {patch_invalid_option.text}"
     )

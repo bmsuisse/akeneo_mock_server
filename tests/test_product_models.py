@@ -188,10 +188,7 @@ class TestProductModelSearch:
                 "search_locale": "en_US",
             },
         )
-        if res2.status_code >= 300:
-            print(f"Response status: {res2.status_code}")
-            print(f"Response body: {res2.text}")
-        assert res2.status_code == 200
+        assert res2.status_code == 200, f"{res2.status_code}: {res2.text}"
         codes2 = {item["code"] for item in res2.json()["_embedded"]["items"]}
         assert "pm-search-a" in codes2
         assert "pm-search-b" in codes2
