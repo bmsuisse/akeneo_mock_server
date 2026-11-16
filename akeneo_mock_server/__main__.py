@@ -1,4 +1,5 @@
 import uvicorn
+
 from akeneo_mock_server.database import init_db
 
 

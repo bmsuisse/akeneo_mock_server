@@ -1,7 +1,9 @@
 import json
-import pytest
+
 import psycopg
+import pytest
 from fastapi.testclient import TestClient
+
 from akeneo_mock_server.app import app
 from akeneo_mock_server.database import get_db_url
 

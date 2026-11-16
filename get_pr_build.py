@@ -1,8 +1,8 @@
-import subprocess
-import json
 import argparse
-import re
+import json
 import os
+import re
+import subprocess
 
 
 def run_command(command, capture_output=True):
@@ -15,8 +15,7 @@ def run_command(command, capture_output=True):
                 print(result.stderr)
             return None
         return result.stdout.strip()
-    else:
-        return subprocess.call(command, shell=True)
+    return subprocess.call(command, shell=True)
 
 
 def main():

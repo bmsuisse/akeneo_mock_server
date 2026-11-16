@@ -1,5 +1,6 @@
 import json
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from fastapi import HTTPException, Request
 
@@ -105,7 +106,7 @@ def apply_patch(existing: dict[str, Any], patch: dict[str, Any]) -> dict[str, An
 
 
 def _get_item_pk(item: Any, pk_field: str) -> str:
-    if isinstance(item, Mapping) or (hasattr(item, "keys") and callable(getattr(item, "keys"))):
+    if isinstance(item, Mapping) or (hasattr(item, "keys") and callable(item.keys)):
         # item is likely a dict or psycopg Row
         row_dict = dict(item)
         if pk_field in row_dict:
@@ -125,8 +126,8 @@ def _get_item_pk(item: Any, pk_field: str) -> str:
 
 
 def _get_item_data_dict(item: Any) -> dict[str, Any]:
-    if isinstance(item, Mapping) or (hasattr(item, "keys") and callable(getattr(item, "keys"))):
-        if "data" in item and item["data"]:
+    if isinstance(item, Mapping) or (hasattr(item, "keys") and callable(item.keys)):
+        if item.get("data"):
             return safe_loads(item["data"])
         # If it's a row from an explicit table, we need to convert it to a dict and handle JSON columns
         data = dict(item)

@@ -1,8 +1,8 @@
 import json
 
-import pytest
 import psycopg
 import psycopg.errors
+import pytest
 from fastapi.testclient import TestClient
 
 from akeneo_mock_server.app import app

@@ -8,11 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-
-from akeneo_mock_server.events import DELIVERY_LOGS
 from fastapi.testclient import TestClient
 
 from akeneo_mock_server.app import app
+from akeneo_mock_server.events import DELIVERY_LOGS
 
 client = TestClient(app)
 
@@ -686,9 +685,7 @@ class TestCatalogue:
         subscribe(["com.akeneo.pim.v1.product.became-complete"], send_product_identifier=True)
         data = {"product": {"uuid": "u-1", "identifier": "x", "complete_on": [{"locale": "en_US", "scope": "web"}]}}
         with capture_webhooks() as captured:
-            client.post(
-                "/api/v1/mock/events", json={"type": "com.akeneo.pim.v1.product.became-complete", "data": data}
-            )
+            client.post("/api/v1/mock/events", json={"type": "com.akeneo.pim.v1.product.became-complete", "data": data})
         assert captured.payloads[0]["data"] == data
 
     def test_emit_unknown_type_is_422(self):

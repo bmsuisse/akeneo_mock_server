@@ -144,9 +144,7 @@ class TestProductModels:
 
 
 class TestProductModelSearch:
-    def _create(
-        self, code: str, family: str, variant: str, values: dict | None = None, categories: list | None = None
-    ):
+    def _create(self, code: str, family: str, variant: str, values: dict | None = None, categories: list | None = None):
         payload: dict = {"code": code, "family": family, "family_variant": variant}
         if values:
             payload["values"] = values

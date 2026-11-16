@@ -1,7 +1,8 @@
 import os
 import time
-import pytest
+
 import psycopg
+import pytest
 
 _DEFAULT_DB_URL = "postgresql://akeneo:akeneo@localhost:54327/akeneo?connect_timeout=10"
 
@@ -98,7 +99,7 @@ def init_db_once(postgres_container):
 
 @pytest.fixture(autouse=True)
 def fresh_db(init_db_once):
-    from akeneo_mock_server.database import get_db_url, MODELS, SUB_MODELS
+    from akeneo_mock_server.database import MODELS, SUB_MODELS, get_db_url
 
     db_url = get_db_url()
     conn = psycopg.connect(db_url)

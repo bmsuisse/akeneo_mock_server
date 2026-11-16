@@ -1,14 +1,15 @@
+import os
+import time
+from collections.abc import Generator
 from contextvars import ContextVar
+from pathlib import Path
+from typing import Any
+
 import psycopg
+from psycopg import sql
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
-from typing import Any, Generator
 from pydantic import BaseModel, Field, model_validator
-from pathlib import Path
-import time
-import os
-
-from psycopg import sql
 
 SCHEMA_SQL_PATH = Path(__file__).with_name("schema.sql")
 _db_pools: dict[str, ConnectionPool] = {}
@@ -54,17 +55,16 @@ def ensure_db_exists(db_name: str):
         return
 
     admin_url = get_admin_url()
-    with psycopg.connect(admin_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
-            if not cur.fetchone():
-                cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name)))
-                # Initialize it
-                token = db_name_var.set(db_name)
-                try:
-                    init_db()
-                finally:
-                    db_name_var.reset(token)
+    with psycopg.connect(admin_url, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
+        if not cur.fetchone():
+            cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name)))
+            # Initialize it
+            token = db_name_var.set(db_name)
+            try:
+                init_db()
+            finally:
+                db_name_var.reset(token)
 
     _known_databases.add(db_name)
 
@@ -112,20 +112,19 @@ def destroy_all_databases() -> list[str]:
     admin_url = get_admin_url()
     dropped = []
 
-    with psycopg.connect(admin_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            # Find all databases starting with 'akeneo'
-            cur.execute("SELECT datname FROM pg_database WHERE datname LIKE 'akeneo%'")
-            databases = [row["datname"] for row in cur.fetchall()]
+    with psycopg.connect(admin_url, autocommit=True) as conn, conn.cursor() as cur:
+        # Find all databases starting with 'akeneo'
+        cur.execute("SELECT datname FROM pg_database WHERE datname LIKE 'akeneo%'")
+        databases = [row["datname"] for row in cur.fetchall()]
 
-            for db in databases:
-                # Terminate active connections
-                cur.execute(
-                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s AND pid <> pg_backend_pid()",
-                    (db,),
-                )
-                cur.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(db)))
-                dropped.append(db)
+        for db in databases:
+            # Terminate active connections
+            cur.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s AND pid <> pg_backend_pid()",
+                (db,),
+            )
+            cur.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(db)))
+            dropped.append(db)
 
     _known_databases.clear()
     return dropped

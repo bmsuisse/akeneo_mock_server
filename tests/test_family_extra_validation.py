@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+
 from akeneo_mock_server.app import app
 
 client = TestClient(app)

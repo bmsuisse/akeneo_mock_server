@@ -6,6 +6,7 @@ decimals_allowed, negative_allowed, date_min/date_max).
 """
 
 from fastapi.testclient import TestClient
+
 from akeneo_mock_server.app import app
 
 client = TestClient(app)

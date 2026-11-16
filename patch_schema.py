@@ -197,7 +197,7 @@ def _fix_transformations_operations(schema_obj: dict) -> None:
 
 
 def patch_schema() -> None:
-    with open("pim-api-docs/content/swagger/akeneo-web-api.json", "r") as f:
+    with open("pim-api-docs/content/swagger/akeneo-web-api.json") as f:
         schema = json.load(f)
 
     definitions = schema.get("definitions", {})

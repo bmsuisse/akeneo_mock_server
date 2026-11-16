@@ -3,18 +3,18 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+import psycopg
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-import psycopg
 
 from akeneo_mock_server.common import PatchTypeError
 from akeneo_mock_server.database import close_db_pool, db_name_var
+from akeneo_mock_server.routers.admin import router as admin_router
 from akeneo_mock_server.routers.event_platform import router as event_platform_router
 from akeneo_mock_server.routers.oauth import router as oauth_router
 from akeneo_mock_server.routers.rest import router as rest_router
 from akeneo_mock_server.routers.root import router as root_router
-from akeneo_mock_server.routers.admin import router as admin_router
 
 
 @asynccontextmanager

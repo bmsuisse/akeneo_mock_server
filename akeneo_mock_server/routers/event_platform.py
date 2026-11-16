@@ -32,7 +32,7 @@ def present_subscription(data: dict[str, Any]) -> dict[str, Any]:
     config = data.get("config")
     if not isinstance(config, dict) or not isinstance(config.get("headers"), dict):
         return data
-    redacted_headers = {name: REDACTED for name in config["headers"]}
+    redacted_headers = dict.fromkeys(config["headers"], REDACTED)
     return {**data, "config": {**config, "headers": redacted_headers}}
 
 
@@ -200,9 +200,7 @@ async def patch_subscription(
     "/subscribers/{subscriber_id}/subscriptions/{subscription_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_subscription(
-    subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)
-) -> Response:
+def delete_subscription(subscriber_id: str, subscription_id: str, db: psycopg.Connection = Depends(get_db)) -> Response:
     row = db.execute(
         "SELECT 1 FROM subscriptions WHERE parent_id = %s AND id = %s", (subscriber_id, subscription_id)
     ).fetchone()

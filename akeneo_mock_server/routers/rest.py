@@ -4,11 +4,11 @@ import re
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
-import psycopg
-from psycopg.types.json import Jsonb
 
+import psycopg
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
+from psycopg.types.json import Jsonb
 from pydantic import ValidationError
 
 from akeneo_mock_server.common import (
@@ -18,8 +18,8 @@ from akeneo_mock_server.common import (
     apply_patch,
     safe_json_body,
 )
-from akeneo_mock_server.events import EVENT_ENTITIES, dispatch_event
 from akeneo_mock_server.database import MODELS, SUB_MODELS, ThreeLevelAttributeOptionModel, get_db
+from akeneo_mock_server.events import EVENT_ENTITIES, dispatch_event
 from akeneo_mock_server.pagination import (
     build_href,
     is_search_after_only_entity,
@@ -31,8 +31,8 @@ from akeneo_mock_server.pagination import (
     supports_search_after_sub_entity,
     validate_limit,
 )
-from akeneo_mock_server.search_filters import collect_filtered_items
 from akeneo_mock_server.schemas import EntityListQuery, GenericPayload, SearchProductsUuidQuery, SubEntityListQuery
+from akeneo_mock_server.search_filters import collect_filtered_items
 
 router = APIRouter(prefix="/api/rest/v1", tags=["rest"])
 
@@ -80,9 +80,7 @@ def search_products_uuid(
     }
 
 
-def _validate_payload(
-    payload: dict[str, Any], model_class: Any | None = None, partial: bool = False
-) -> dict[str, Any]:
+def _validate_payload(payload: dict[str, Any], model_class: Any | None = None, partial: bool = False) -> dict[str, Any]:
     if model_class is not None:
         if partial:
             return payload
