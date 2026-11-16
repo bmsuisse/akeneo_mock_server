@@ -174,10 +174,10 @@ def parse_date_value(value: Any) -> datetime | None:
         parsed = datetime.fromisoformat(iso_candidate)
     except ValueError:
         try:
-            parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+            parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
         except ValueError:
             try:
-                parsed = datetime.strptime(value, "%Y-%m-%d")
+                parsed = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC)
             except ValueError:
                 return None
     if parsed.tzinfo is None:

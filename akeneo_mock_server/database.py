@@ -73,9 +73,6 @@ def ensure_db_exists(db_name: str) -> None:
 
 
 def get_db_pool() -> ConnectionPool:
-    global _db_pools
-    global _db_pool_urls
-
     db_name = _get_db_name()
     db_url = get_db_url()
 
@@ -98,9 +95,6 @@ def get_db_pool() -> ConnectionPool:
 
 
 def close_db_pool() -> None:
-    global _db_pools
-    global _db_pool_urls
-
     for pool in _db_pools.values():
         pool.close()
     _db_pools.clear()
@@ -109,8 +103,6 @@ def close_db_pool() -> None:
 
 def destroy_all_databases() -> list[str]:
     """Drops all databases starting with 'akeneo' and clears internal state."""
-    global _known_databases
-
     close_db_pool()
     admin_url = get_admin_url()
     dropped = []
@@ -134,8 +126,7 @@ def destroy_all_databases() -> list[str]:
 
 
 def get_connection() -> psycopg.Connection[DictRow]:
-    conn = psycopg.connect(get_db_url(), row_factory=dict_row)
-    return conn
+    return psycopg.connect(get_db_url(), row_factory=dict_row)
 
 
 class EntityBase(BaseModel):

@@ -538,9 +538,11 @@ def find_deliveries(event_types: set[str]) -> list[Delivery]:
                 url = _target_url(subscription, subscriber)
                 if url is None:
                     continue
-                for event_type in subscription.get("events", []):
-                    if event_type in event_types:
-                        deliveries.append(Delivery(event_type, subscriber, subscription, url))
+                deliveries.extend(
+                    Delivery(event_type, subscriber, subscription, url)
+                    for event_type in subscription.get("events", [])
+                    if event_type in event_types
+                )
         return deliveries
     finally:
         conn.close()

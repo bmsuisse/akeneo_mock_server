@@ -7,7 +7,7 @@ import subprocess
 
 def run_command(command: str, capture_output: bool = True) -> str | None:
     if capture_output:
-        result = subprocess.run(command, capture_output=True, text=True, shell=True)
+        result = subprocess.run(command, capture_output=True, text=True, shell=True, check=False)
         if result.returncode != 0:
             # Only print error if not checking for branch info
             if "git show" not in command:
@@ -35,10 +35,7 @@ def main() -> None:
         if git_show:
             # Output looks like: (HEAD -> branch_name, origin/branch_name)
             match = re.search(r"HEAD -> ([^,)]+)", git_show)
-            if match:
-                branch = match.group(1)
-            else:
-                branch = "main"  # Fallback
+            branch = match.group(1) if match else "main"
         else:
             branch = "main"
 

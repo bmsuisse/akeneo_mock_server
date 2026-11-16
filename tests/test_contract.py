@@ -19,26 +19,26 @@ Tolerance policy
 ----------------
 Three classes of "known-acceptable" responses are tolerated and do not fail the suite:
 
-1. **405 Method Not Allowed** – the mock server only implements a subset of the
+1. **405 Method Not Allowed** - the mock server only implements a subset of the
    full Akeneo REST API.  Endpoints that are in the spec but not yet implemented
    return 405.  We skip status_code_conformance for these so the suite stays
    green while we incrementally add routes.
 
-2. **204 No Content on PATCH/DELETE without a Content-Type header** – correct
+2. **204 No Content on PATCH/DELETE without a Content-Type header** - correct
    HTTP behaviour (RFC 7230 says no body → no Content-Type), but the Akeneo
    OpenAPI spec inconsistently declares a 200/application/json response for
    several mutation endpoints.  We skip content_type_conformance for 204 bodies.
 
-3. **422 Unprocessable Entity** – FastAPI validates query / body parameters
+3. **422 Unprocessable Entity** - FastAPI validates query / body parameters
    strictly and returns 422 when schemathesis sends deliberately malformed
    inputs (e.g. ``with_count=null&with_count=null``).  The Akeneo spec does not
    document 422, so we accept it without raising a status-code failure.
 
-4. **409 Conflict** – POST endpoints return 409 when schemathesis generates a
+4. **409 Conflict** - POST endpoints return 409 when schemathesis generates a
    request that creates a resource whose code already exists in the database.
-   This is correct server behaviour but the spec doesn’t document 409.
+   This is correct server behaviour but the spec doesn't document 409.
 
-5. **415 Unsupported Media Type** – returned when schemathesis sends a request
+5. **415 Unsupported Media Type** - returned when schemathesis sends a request
    without a JSON body (e.g. multipart form data).  Not in the Akeneo spec.
 
 ``response_schema_conformance`` is **not** applied by default.  The mock server

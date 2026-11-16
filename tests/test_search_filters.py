@@ -38,7 +38,10 @@ def test_filter_on_enabled_and_categories() -> None:
 
     items = _list_products_uuid(
         {
-            "search": '{"enabled":[{"operator":"=","value":true}],"categories":[{"operator":"IN","value":["winter_collection"]}]}'
+            "search": (
+                '{"enabled":[{"operator":"=","value":true}],'
+                '"categories":[{"operator":"IN","value":["winter_collection"]}]}'
+            )
         }
     )
     assert len(items) == 1

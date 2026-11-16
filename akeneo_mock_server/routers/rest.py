@@ -217,9 +217,9 @@ def _validate_attribute_value(
         if not date_min and not date_max:
             return
         try:
-            date_val = datetime.fromisoformat(data.replace("Z", "+00:00"))
+            date_val = datetime.fromisoformat(data)
             if date_min:
-                min_dt = datetime.fromisoformat(date_min.replace("Z", "+00:00"))
+                min_dt = datetime.fromisoformat(date_min)
                 if date_val.tzinfo is None and min_dt.tzinfo is not None:
                     date_val = date_val.replace(tzinfo=min_dt.tzinfo)
                 elif date_val.tzinfo is not None and min_dt.tzinfo is None:
@@ -230,7 +230,7 @@ def _validate_attribute_value(
                         detail=f"Attribute '{attr_code}': date is before minimum {date_min}.",
                     )
             if date_max:
-                max_dt = datetime.fromisoformat(date_max.replace("Z", "+00:00"))
+                max_dt = datetime.fromisoformat(date_max)
                 if date_val.tzinfo is None and max_dt.tzinfo is not None:
                     date_val = date_val.replace(tzinfo=max_dt.tzinfo)
                 elif date_val.tzinfo is not None and max_dt.tzinfo is None:
@@ -515,9 +515,7 @@ def _supports_sql_pagination_path(entity_name: str, query: EntityListQuery) -> b
         return False
     if query.search_locale is not None or query.search_scope is not None:
         return False
-    if query.attributes is not None or query.locales is not None or query.scope is not None:
-        return False
-    return True
+    return query.attributes is None and query.locales is None and query.scope is None
 
 
 def _parse_collection_payload(content_type: str, body: bytes, model_class: Any | None = None) -> list[dict[str, Any]]:
@@ -581,7 +579,10 @@ def _apply_table_select_options_flag(
             continue
         validations = column.get("validations")
         if isinstance(validations, dict) and "select_options" in validations:
-            column = {**column, "validations": {k: v for k, v in validations.items() if k != "select_options"}}
+            stripped_columns.append(
+                {**column, "validations": {k: v for k, v in validations.items() if k != "select_options"}}
+            )
+            continue
         stripped_columns.append(column)
     return {**item, "table_configuration": stripped_columns}
 
@@ -648,7 +649,10 @@ def _upsert_item(
 
     if table in tables_with_data:
         if parent_id:
-            sql = f'INSERT INTO "{table}" (id, parent_id, data) VALUES (%s, %s, %s) ON CONFLICT (id) DO UPDATE SET parent_id = EXCLUDED.parent_id, data = EXCLUDED.data'
+            sql = (
+                f'INSERT INTO "{table}" (id, parent_id, data) VALUES (%s, %s, %s) '
+                "ON CONFLICT (id) DO UPDATE SET parent_id = EXCLUDED.parent_id, data = EXCLUDED.data"
+            )
             db.execute(sql, (code, parent_id, Jsonb(data)))
         else:
             sql = (
@@ -657,7 +661,10 @@ def _upsert_item(
             db.execute(sql, (code, Jsonb(data)))
     elif table == "subscriptions":
         pk = f"{parent_id}/{code}"
-        sql = "INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s) ON CONFLICT (pk) DO UPDATE SET id = EXCLUDED.id, parent_id = EXCLUDED.parent_id, data = EXCLUDED.data"
+        sql = (
+            "INSERT INTO subscriptions (pk, id, parent_id, data) VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (pk) DO UPDATE SET id = EXCLUDED.id, parent_id = EXCLUDED.parent_id, data = EXCLUDED.data"
+        )
         db.execute(sql, (pk, code, parent_id, Jsonb(data)))
     else:
         columns = []
@@ -687,9 +694,15 @@ def _upsert_item(
 
         update_set = ", ".join([f"{col} = EXCLUDED.{col}" for col in columns if col != '"id"'])
         if update_set:
-            sql = f'INSERT INTO "{table}" ({", ".join(columns)}) VALUES ({", ".join(placeholders)}) ON CONFLICT (id) DO UPDATE SET {update_set}'
+            sql = (
+                f'INSERT INTO "{table}" ({", ".join(columns)}) VALUES ({", ".join(placeholders)}) '
+                f"ON CONFLICT (id) DO UPDATE SET {update_set}"
+            )
         else:
-            sql = f'INSERT INTO "{table}" ({", ".join(columns)}) VALUES ({", ".join(placeholders)}) ON CONFLICT (id) DO NOTHING'
+            sql = (
+                f'INSERT INTO "{table}" ({", ".join(columns)}) VALUES ({", ".join(placeholders)}) '
+                "ON CONFLICT (id) DO NOTHING"
+            )
 
         db.execute(sql, values)
 
@@ -1187,7 +1200,10 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
             rows = db.execute(sql, (parent_code, query.limit + 1, offset)).fetchall()
         else:
             if query.search_after:
-                sql = f"SELECT * FROM {table} WHERE parent_id = %s AND {order_column} > %s ORDER BY {order_column} LIMIT %s"
+                sql = (
+                    f"SELECT * FROM {table} WHERE parent_id = %s AND {order_column} > %s "
+                    f"ORDER BY {order_column} LIMIT %s"
+                )
                 rows = db.execute(sql, (parent_code, query.search_after, query.limit + 1)).fetchall()
             else:
                 sql = f"SELECT * FROM {table} WHERE parent_id = %s ORDER BY {order_column} LIMIT %s"
@@ -1463,7 +1479,10 @@ def register_three_level_routes(parent_entity: str, table: str) -> None:
                 content={},
                 status_code=201,
                 headers={
-                    "Location": f"/api/rest/v1/{parent_entity}/{quote(parent_code)}/attributes/{quote(attribute_code)}/options/{quote(code)}"
+                    "Location": (
+                        f"/api/rest/v1/{parent_entity}/{quote(parent_code)}"
+                        f"/attributes/{quote(attribute_code)}/options/{quote(code)}"
+                    )
                 },
             )
         return Response(status_code=204)
