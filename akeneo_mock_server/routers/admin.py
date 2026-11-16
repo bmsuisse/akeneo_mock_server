@@ -2,6 +2,7 @@ import secrets
 
 import psycopg
 from fastapi import APIRouter, HTTPException
+from psycopg import sql
 from pydantic import BaseModel
 
 from akeneo_mock_server.database import (
@@ -90,7 +91,9 @@ async def backup_database(request: BackupRequest) -> dict[str, str]:
             (current_db,),
         )
 
-        cur.execute(f'CREATE DATABASE "{target_db}" WITH TEMPLATE "{current_db}"')
+        cur.execute(
+            sql.SQL("CREATE DATABASE {} WITH TEMPLATE {}").format(sql.Identifier(target_db), sql.Identifier(current_db))
+        )
 
     return {
         "message": "Database backup successful",
@@ -123,8 +126,10 @@ async def restore_database(request: RestoreRequest) -> dict[str, str]:
             (current_db,),
         )
 
-        cur.execute(f'DROP DATABASE "{current_db}"')
-        cur.execute(f'CREATE DATABASE "{current_db}" WITH TEMPLATE "{source_db}"')
+        cur.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(current_db)))
+        cur.execute(
+            sql.SQL("CREATE DATABASE {} WITH TEMPLATE {}").format(sql.Identifier(current_db), sql.Identifier(source_db))
+        )
 
     return {
         "message": "Database restoration successful",

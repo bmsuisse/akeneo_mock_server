@@ -1,5 +1,5 @@
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def app_lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def app_lifespan(_: FastAPI) -> AsyncGenerator[None]:
     yield
     close_db_pool()
 

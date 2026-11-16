@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 import json
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -187,7 +187,7 @@ class Captured:
 
 
 @contextmanager
-def capture_webhooks(status_code: int = 200) -> Iterator[Captured]:
+def capture_webhooks(status_code: int = 200) -> Generator[Captured]:
     captured = Captured()
 
     async def fake_post(self: Any, url: str, *args: Any, **kwargs: Any) -> MagicMock:

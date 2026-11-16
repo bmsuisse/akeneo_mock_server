@@ -60,9 +60,11 @@ Note on response_schema_conformance
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from pathlib import Path
 
 import schemathesis
+from hypothesis import HealthCheck, settings
 from schemathesis.checks import CHECKS, load_all_checks
 from schemathesis.config import GenerationConfig, ProjectConfig, ProjectsConfig
 
@@ -143,7 +145,9 @@ schema = schemathesis.openapi.from_asgi(
 schema.raw_schema = schemathesis.openapi.from_path(SCHEMA_PATH).raw_schema
 
 
-from hypothesis import HealthCheck, settings  # noqa: E402
+def _validate(case: schemathesis.Case, response: schemathesis.Response, checks: Sequence[object]) -> None:
+    # schemathesis types CHECKS.get_by_names() wider than validate_response() accepts
+    case.validate_response(response, checks=list(checks))  # ty: ignore[invalid-argument-type]
 
 
 @schema.parametrize()
@@ -164,12 +168,12 @@ def test_api_contract(case: schemathesis.Case) -> None:
 
     # Tolerated status codes — see module docstring for justification.
     if response.status_code in _TOLERATED_STATUS_CODES:
-        case.validate_response(response, checks=_checks_server_error_only)
+        _validate(case, response, _checks_server_error_only)
         return
 
     # Download endpoints return binary data — skip content-type check.
     if case.operation.path in _DOWNLOAD_PATHS:
-        case.validate_response(response, checks=_checks_server_error_only)
+        _validate(case, response, _checks_server_error_only)
         return
 
-    case.validate_response(response, checks=_checks_no_schema)
+    _validate(case, response, _checks_no_schema)

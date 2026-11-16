@@ -4,7 +4,7 @@ import time
 from collections.abc import Generator
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Any
+from typing import Any, LiteralString, cast
 
 import psycopg
 from psycopg import sql
@@ -14,10 +14,17 @@ from pydantic import BaseModel, Field, model_validator
 
 logger = logging.getLogger(__name__)
 
+DbConnection = psycopg.Connection[DictRow]
+
 SCHEMA_SQL_PATH = Path(__file__).with_name("schema.sql")
-_db_pools: dict[str, ConnectionPool] = {}
+_db_pools: dict[str, ConnectionPool[DbConnection]] = {}
 _db_pool_urls: dict[str, str] = {}
 _known_databases: set[str] = set()
+
+
+def trusted_sql(query: str) -> sql.SQL:
+    return sql.SQL(cast(LiteralString, query))
+
 
 db_name_var: ContextVar[str | None] = ContextVar("db_name", default=None)
 
@@ -72,7 +79,7 @@ def ensure_db_exists(db_name: str) -> None:
     _known_databases.add(db_name)
 
 
-def get_db_pool() -> ConnectionPool:
+def get_db_pool() -> ConnectionPool[DbConnection]:
     db_name = _get_db_name()
     db_url = get_db_url()
 
@@ -82,7 +89,7 @@ def get_db_pool() -> ConnectionPool:
     if db_name in _db_pools:
         _db_pools[db_name].close()
 
-    pool = ConnectionPool(
+    pool = ConnectionPool[DbConnection](
         conninfo=db_url,
         min_size=1,
         max_size=20,
@@ -107,7 +114,10 @@ def destroy_all_databases() -> list[str]:
     admin_url = get_admin_url()
     dropped = []
 
-    with psycopg.connect(admin_url, autocommit=True) as conn, conn.cursor() as cur:
+    with (
+        psycopg.Connection[DictRow].connect(admin_url, autocommit=True, row_factory=dict_row) as conn,
+        conn.cursor() as cur,
+    ):
         # Find all databases starting with 'akeneo'
         cur.execute("SELECT datname FROM pg_database WHERE datname LIKE 'akeneo%'")
         databases = [row["datname"] for row in cur.fetchall()]
@@ -125,8 +135,8 @@ def destroy_all_databases() -> list[str]:
     return dropped
 
 
-def get_connection() -> psycopg.Connection[DictRow]:
-    return psycopg.connect(get_db_url(), row_factory=dict_row)
+def get_connection() -> DbConnection:
+    return psycopg.Connection[DictRow].connect(get_db_url(), row_factory=dict_row)
 
 
 class EntityBase(BaseModel):
@@ -474,20 +484,20 @@ def init_db() -> None:
     for statement in statements:
         normalized_statement = statement.strip()
         if normalized_statement:
-            conn.execute(normalized_statement)
+            conn.execute(trusted_sql(normalized_statement))
 
     conn.commit()
     conn.close()
 
 
-def get_db() -> Generator[psycopg.Connection, None, None]:
+def get_db() -> Generator[DbConnection, None, None]:
     with get_db_pool().connection() as conn:
         yield conn
 
 
 # Helper for Session-like behavior if needed, but we'll use raw connections.
 class SessionShim:
-    def __init__(self, conn: psycopg.Connection) -> None:
+    def __init__(self, conn: DbConnection) -> None:
         self.conn = conn
 
     def exec(self, query: Any) -> None:

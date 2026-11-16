@@ -1,10 +1,17 @@
+from __future__ import annotations
+
 import logging
 import os
 import time
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 import psycopg
 import pytest
+from psycopg import sql
+
+if TYPE_CHECKING:
+    from docker.models.containers import Container
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +27,7 @@ def _try_connect(db_url: str) -> bool:
         return False
 
 
-def _start_docker_container() -> tuple[object, str]:
+def _start_docker_container() -> tuple[Container, str]:
     import docker
     from docker.errors import DockerException, NotFound
 
@@ -74,7 +81,7 @@ def _start_docker_container() -> tuple[object, str]:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def postgres_container() -> Iterator[object | None]:
+def postgres_container() -> Iterator[Container | None]:
     # Use an already-running postgres if available (e.g. CI or local install)
     existing_url = os.environ.get("AKENEO_DATABASE_URL", _DEFAULT_DB_URL)
     if "connect_timeout" not in existing_url:
@@ -94,7 +101,7 @@ def postgres_container() -> Iterator[object | None]:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def init_db_once(postgres_container: object | None) -> None:
+def init_db_once(postgres_container: Container | None) -> None:
     """Create tables/indexes once per session to avoid per-test DDL lock contention."""
     from akeneo_mock_server.database import init_db
 
@@ -120,7 +127,7 @@ def fresh_db(init_db_once: None) -> Iterator[None]:
         for table in tables:
             cursor.execute("SAVEPOINT trunc")
             try:
-                cursor.execute(f'TRUNCATE TABLE "{table}" CASCADE')
+                cursor.execute(sql.SQL("TRUNCATE TABLE {} CASCADE").format(sql.Identifier(table)))
                 cursor.execute("RELEASE SAVEPOINT trunc")
             except psycopg.errors.UndefinedTable:
                 cursor.execute("ROLLBACK TO SAVEPOINT trunc")
