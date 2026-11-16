@@ -80,3 +80,5 @@ publish-url = "https://pkgs.dev.azure.com/bmeurope/_packaging/BMS/pypi/upload/"
 
 [tool.uv]
 native-tls = true
+exclude-newer = "5 days"
+exclude-newer-package = { skillup = false }
