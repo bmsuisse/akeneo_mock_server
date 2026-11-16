@@ -2,7 +2,7 @@ import copy
 import json
 import re
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 from uuid import uuid4
 
 import psycopg
@@ -56,8 +56,8 @@ def _ensure_product_uuid(value: Any, db: psycopg.Connection) -> str:
 
 @router.get("/products-uuid/search")
 def search_products_uuid(
-    query: SearchProductsUuidQuery = Depends(),
-    db: psycopg.Connection = Depends(get_db),
+    query: Annotated[SearchProductsUuidQuery, Depends()],
+    db: Annotated[psycopg.Connection, Depends(get_db)],
 ) -> dict[str, Any]:
     return {
         "_links": {"self": {"href": "/api/rest/v1/products-uuid/search"}},
@@ -701,9 +701,9 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
 
     @router.get(base_path)
     def get_items(
-        query: EntityListQuery = Depends(),
+        query: Annotated[EntityListQuery, Depends()],
+        db: Annotated[psycopg.Connection, Depends(get_db)],
         with_table_select_options: bool = False,
-        db: psycopg.Connection = Depends(get_db),
     ) -> dict[str, Any]:
         validate_limit(query.limit)
         resolved_pagination_type = resolve_pagination_type(
@@ -838,8 +838,8 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
     @router.get(f"{base_path}/{{code}}")
     def get_item(
         code: str,
+        db: Annotated[psycopg.Connection, Depends(get_db)],
         with_table_select_options: bool = False,
-        db: psycopg.Connection = Depends(get_db),
     ) -> dict[str, Any] | None:
         if entity_name == "products-uuid":
             item = _find_product_by_uuid(db, code)
@@ -856,7 +856,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
     async def create_item(
         request: Request,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[psycopg.Connection, Depends(get_db)],
     ) -> JSONResponse:
         data = _validate_payload(await safe_json_body(request), model)
         code = data.get(pk_field)
@@ -909,7 +909,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
         code: str,
         request: Request,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[psycopg.Connection, Depends(get_db)],
     ) -> Response:
         data = _validate_payload(await safe_json_body(request), model, partial=True)
         previous_data: dict[str, Any] | None = None
@@ -1017,7 +1017,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
     def delete_item(
         code: str,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[psycopg.Connection, Depends(get_db)],
     ) -> Response:
         if entity_name == "products-uuid":
             row = _find_product_by_uuid(db, code)
@@ -1045,7 +1045,7 @@ def register_entity_routes(entity_name: str, config: dict[str, Any]) -> None:
     async def patch_multiple_items(
         request: Request,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[psycopg.Connection, Depends(get_db)],
     ) -> Response:
         content_type = request.headers.get("content-type", "")
         body = await request.body()
@@ -1153,8 +1153,8 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
     @router.get(base_path)
     def get_sub_items(
         parent_code: str,
-        query: SubEntityListQuery = Depends(),
-        db: psycopg.Connection = Depends(get_db),
+        query: Annotated[SubEntityListQuery, Depends()],
+        db: Annotated[psycopg.Connection, Depends(get_db)],
     ) -> dict[str, Any] | list[dict[str, Any]]:
         if is_non_paginated_sub_entity:
             rows = db.execute(
@@ -1245,7 +1245,9 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         return {"_links": links, "_embedded": {"items": [e[1] for e in selected]}}
 
     @router.get(f"{base_path}/{{code}}")
-    def get_sub_item(parent_code: str, code: str, db: psycopg.Connection = Depends(get_db)) -> dict[str, Any] | None:
+    def get_sub_item(
+        parent_code: str, code: str, db: Annotated[psycopg.Connection, Depends(get_db)]
+    ) -> dict[str, Any] | None:
         row = db.execute(f"SELECT * FROM {table} WHERE parent_id = %s AND id = %s", (parent_code, code)).fetchone()
         if not row:
             raise HTTPException(status_code=404)
@@ -1256,7 +1258,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         parent_code: str,
         request: Request,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[psycopg.Connection, Depends(get_db)],
     ) -> JSONResponse:
         if is_attribute_options_sub_entity:
             _validate_attribute_option_parent_type(db, parent_code)
@@ -1284,7 +1286,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         parent_code: str,
         request: Request,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[psycopg.Connection, Depends(get_db)],
     ) -> Response:
         if is_attribute_options_sub_entity:
             _validate_attribute_option_parent_type(db, parent_code)
@@ -1363,7 +1365,7 @@ def register_sub_entity_routes(sub_entity_key: str, config: dict[str, Any]) -> N
         code: str,
         request: Request,
         background_tasks: BackgroundTasks,
-        db: psycopg.Connection = Depends(get_db),
+        db: Annotated[psycopg.Connection, Depends(get_db)],
     ) -> Response:
         if is_attribute_options_sub_entity:
             _validate_attribute_option_parent_type(db, parent_code)
@@ -1405,7 +1407,7 @@ def register_three_level_routes(parent_entity: str, table: str) -> None:
 
     @router.get(base_path)
     def get_three_level_items(
-        parent_code: str, attribute_code: str, db: psycopg.Connection = Depends(get_db)
+        parent_code: str, attribute_code: str, db: Annotated[psycopg.Connection, Depends(get_db)]
     ) -> JSONResponse:
         rows = db.execute(
             f"SELECT * FROM {table} WHERE parent_id = %s ORDER BY id",
@@ -1420,7 +1422,7 @@ def register_three_level_routes(parent_entity: str, table: str) -> None:
 
     @router.get(f"{base_path}/{{code}}")
     def get_three_level_item(
-        parent_code: str, attribute_code: str, code: str, db: psycopg.Connection = Depends(get_db)
+        parent_code: str, attribute_code: str, code: str, db: Annotated[psycopg.Connection, Depends(get_db)]
     ) -> JSONResponse:
         row = db.execute(
             f"SELECT * FROM {table} WHERE id = %s",
@@ -1433,7 +1435,11 @@ def register_three_level_routes(parent_entity: str, table: str) -> None:
 
     @router.patch(f"{base_path}/{{code}}")
     async def patch_three_level_item(
-        parent_code: str, attribute_code: str, code: str, request: Request, db: psycopg.Connection = Depends(get_db)
+        parent_code: str,
+        attribute_code: str,
+        code: str,
+        request: Request,
+        db: Annotated[psycopg.Connection, Depends(get_db)],
     ) -> Response:
         from urllib.parse import quote
 
