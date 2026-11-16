@@ -5,7 +5,7 @@ from akeneo_mock_server.app import app
 client = TestClient(app)
 
 
-def test_create_family_with_non_existing_attribute():
+def test_create_family_with_non_existing_attribute() -> None:
     # Attempt to create a family with an attribute that does not exist
     response = client.post(
         "/api/rest/v1/families",
@@ -17,7 +17,7 @@ def test_create_family_with_non_existing_attribute():
     assert "non_existing_attribute" in response.text
 
 
-def test_patch_family_with_non_existing_attribute():
+def test_patch_family_with_non_existing_attribute() -> None:
     # 1. Create a valid family
     client.post("/api/rest/v1/families", json={"code": "valid_family", "attributes": []})
 

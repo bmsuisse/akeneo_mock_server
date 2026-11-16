@@ -7,7 +7,7 @@ from akeneo_mock_server.app import app
 client = TestClient(app)
 
 
-def test_get_family_by_code_returns_code_field():
+def test_get_family_by_code_returns_code_field() -> None:
     client.post("/api/rest/v1/families", json={"code": "test-fam-get"})
     res = client.get("/api/rest/v1/families/test-fam-get")
     assert res.status_code == 200
@@ -15,12 +15,12 @@ def test_get_family_by_code_returns_code_field():
     assert body["code"] == "test-fam-get"
 
 
-def test_get_family_by_code_not_found():
+def test_get_family_by_code_not_found() -> None:
     res = client.get("/api/rest/v1/families/nonexistent-family")
     assert res.status_code == 404
 
 
-def test_patch_family_by_code():
+def test_patch_family_by_code() -> None:
     client.post("/api/rest/v1/families", json={"code": "test-fam-patch"})
     res = client.patch("/api/rest/v1/families/test-fam-patch", json={"labels": {"en_US": "Patched"}})
     assert res.status_code == 204
@@ -29,7 +29,7 @@ def test_patch_family_by_code():
     assert body.get("labels", {}).get("en_US") == "Patched"
 
 
-def test_filter_families_by_code_in():
+def test_filter_families_by_code_in() -> None:
     client.post("/api/rest/v1/families", json={"code": "fam-filter-a"})
     client.post("/api/rest/v1/families", json={"code": "fam-filter-b"})
     client.post("/api/rest/v1/families", json={"code": "fam-filter-c"})
@@ -43,7 +43,7 @@ def test_filter_families_by_code_in():
     assert "fam-filter-c" not in codes
 
 
-def test_filter_families_by_code_equals():
+def test_filter_families_by_code_equals() -> None:
     client.post("/api/rest/v1/families", json={"code": "fam-eq-x"})
     client.post("/api/rest/v1/families", json={"code": "fam-eq-y"})
 
@@ -70,7 +70,7 @@ def _create_family(code: str, attributes: list[str] | None = None) -> None:
     client.post("/api/rest/v1/families", json={"code": code, "attributes": attributes or []})
 
 
-def test_create_family_variant_persists_variant_attribute_sets():
+def test_create_family_variant_persists_variant_attribute_sets() -> None:
     _create_family("fam-var-1", ["color", "size"])
     payload = {
         "code": "fam-var-1-color",
@@ -87,7 +87,7 @@ def test_create_family_variant_persists_variant_attribute_sets():
     assert body["variant_attribute_sets"] == [{"level": 1, "axes": ["color"], "attributes": ["color", "size"]}]
 
 
-def test_create_family_variant_persists_labels():
+def test_create_family_variant_persists_labels() -> None:
     _create_family("fam-var-2", ["size"])
     payload = {
         "code": "fam-var-2-size",
@@ -100,7 +100,7 @@ def test_create_family_variant_persists_labels():
     assert body["labels"] == {"en_US": "By Size", "fr_FR": "Par Taille"}
 
 
-def test_list_family_variants_includes_variant_attribute_sets():
+def test_list_family_variants_includes_variant_attribute_sets() -> None:
     _create_family("fam-var-3", ["attr1", "attr2"])
     for i in range(1, 3):
         client.post(
@@ -119,7 +119,7 @@ def test_list_family_variants_includes_variant_attribute_sets():
     assert by_code["fam-var-3-v2"]["variant_attribute_sets"][0]["axes"] == ["attr2"]
 
 
-def test_create_family_variant_with_multiple_levels():
+def test_create_family_variant_with_multiple_levels() -> None:
     _create_family("fam-var-4", ["color", "size", "weight"])
     payload = {
         "code": "fam-var-4-multi",
@@ -137,7 +137,7 @@ def test_create_family_variant_with_multiple_levels():
     assert sets[2]["attributes"] == ["size", "weight"]
 
 
-def test_patch_family_variant_updates_variant_attribute_sets():
+def test_patch_family_variant_updates_variant_attribute_sets() -> None:
     _create_family("fam-var-5", ["color", "size"])
     client.post(
         "/api/rest/v1/families/fam-var-5/variants",

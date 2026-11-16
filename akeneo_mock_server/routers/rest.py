@@ -628,7 +628,7 @@ def _convert_value_to_type(value: Any, column_type: str) -> Any:
 
 def _upsert_item(
     db: psycopg.Connection, table: str, pk_field: str, code: str, data: dict[str, Any], parent_id: str | None = None
-):
+) -> None:
     tables_with_data = {
         "asset_families",
         "deprecated_assets",

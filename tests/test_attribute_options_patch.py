@@ -7,7 +7,7 @@ from akeneo_mock_server.app import app
 client = TestClient(app)
 
 
-def test_patch_attribute_options_collection_json():
+def test_patch_attribute_options_collection_json() -> None:
     attribute_code = "color_attr"
 
     # 1. Create a select attribute
@@ -73,7 +73,7 @@ def test_patch_attribute_options_collection_json():
     assert response.json()["labels"]["fr_FR"] == "Rouge"
 
 
-def test_patch_attribute_option_single():
+def test_patch_attribute_option_single() -> None:
     attribute_code = "size_attr"
 
     # 1. Create a select attribute
@@ -105,7 +105,7 @@ def test_patch_attribute_option_single():
     assert response.json()["labels"] == {"en_US": "Small"}  # Labels should be preserved
 
 
-def test_patch_attribute_options_collection_vnd_json():
+def test_patch_attribute_options_collection_vnd_json() -> None:
     attribute_code = "material_attr"
 
     # 1. Create a select attribute
@@ -165,7 +165,7 @@ def test_patch_attribute_options_collection_vnd_json():
     assert response.json()["labels"]["en_US"] == "Fine Wood"
 
 
-def test_patch_attribute_options_invalid_attribute_type():
+def test_patch_attribute_options_invalid_attribute_type() -> None:
     attribute_code = "text_attr"
 
     # 1. Create a text attribute (doesn't support options)

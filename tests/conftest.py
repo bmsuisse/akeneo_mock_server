@@ -1,5 +1,6 @@
 import os
 import time
+from collections.abc import Iterator
 
 import psycopg
 import pytest
@@ -70,7 +71,7 @@ def _start_docker_container() -> tuple[object, str]:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def postgres_container():
+def postgres_container() -> Iterator[object | None]:
     # Use an already-running postgres if available (e.g. CI or local install)
     existing_url = os.environ.get("AKENEO_DATABASE_URL", _DEFAULT_DB_URL)
     if "connect_timeout" not in existing_url:
@@ -90,7 +91,7 @@ def postgres_container():
 
 
 @pytest.fixture(scope="session", autouse=True)
-def init_db_once(postgres_container):
+def init_db_once(postgres_container: object | None) -> None:
     """Create tables/indexes once per session to avoid per-test DDL lock contention."""
     from akeneo_mock_server.database import init_db
 
@@ -98,7 +99,7 @@ def init_db_once(postgres_container):
 
 
 @pytest.fixture(autouse=True)
-def fresh_db(init_db_once):
+def fresh_db(init_db_once: None) -> Iterator[None]:
     from akeneo_mock_server.database import MODELS, SUB_MODELS, get_db_url
 
     db_url = get_db_url()

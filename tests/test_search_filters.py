@@ -18,7 +18,7 @@ def _list_products_uuid(params: dict[str, str]) -> list[dict[str, Any]]:
     return response.json()["_embedded"]["items"]
 
 
-def test_filter_on_enabled_and_categories():
+def test_filter_on_enabled_and_categories() -> None:
     _create_product_uuid(
         {
             "uuid": "8945388d-cf5b-49af-8799-05d1ed6e296f",
@@ -45,7 +45,7 @@ def test_filter_on_enabled_and_categories():
     assert items[0]["identifier"] == "winter-shirt"
 
 
-def test_filter_on_values_with_search_locale_and_scope():
+def test_filter_on_values_with_search_locale_and_scope() -> None:
     _create_product_uuid(
         {
             "uuid": "0a84fa5a-d45d-4294-a0b7-56c7a00e4f77",
@@ -77,7 +77,7 @@ def test_filter_on_values_with_search_locale_and_scope():
     assert items[0]["identifier"] == "english-ecommerce"
 
 
-def test_value_projection_with_attributes_locales_and_scope():
+def test_value_projection_with_attributes_locales_and_scope() -> None:
     _create_product_uuid(
         {
             "uuid": "91f31a9e-f2d4-4078-9d8f-0b4d9bf05cc1",
@@ -107,6 +107,6 @@ def test_value_projection_with_attributes_locales_and_scope():
     assert values["name"][0]["scope"] == "ecommerce"
 
 
-def test_invalid_search_json_returns_422():
+def test_invalid_search_json_returns_422() -> None:
     response = client.get("/api/rest/v1/products-uuid", params={"search": "{"})
     assert response.status_code == 422

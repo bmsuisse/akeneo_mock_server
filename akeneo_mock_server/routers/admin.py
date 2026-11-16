@@ -25,7 +25,7 @@ class RestoreRequest(BaseModel):
 
 
 @router.get("/status")
-async def status():
+async def status() -> dict[str, str]:
     """Check if the server is running and the database is accessible."""
     try:
         with psycopg.connect(get_admin_url(), autocommit=True) as conn, conn.cursor() as cur:
@@ -37,14 +37,14 @@ async def status():
 
 
 @router.post("/ensure_db")
-async def ensure_db():
+async def ensure_db() -> dict[str, str]:
     db_name = _get_db_name()
     ensure_db_exists(db_name)
     return {"message": f"Database '{db_name}' ensured"}
 
 
 @router.post("/init_db")
-async def init_db_endpoint():
+async def init_db_endpoint() -> dict[str, str]:
     from akeneo_mock_server.database import init_db
 
     db_name = _get_db_name()
@@ -54,21 +54,21 @@ async def init_db_endpoint():
 
 
 @router.post("/destroy_all")
-async def destroy_all():
+async def destroy_all() -> dict[str, str | list[str]]:
     """Drop all databases managed by the mock server (starting with 'akeneo')."""
     dropped = destroy_all_databases()
     return {"message": "All databases destroyed", "dropped": dropped}
 
 
 @router.post("/clear")
-async def clear_database():
+async def clear_database() -> dict[str, str]:
     """Completely clear the current database and re-initialize it."""
     init_db()
     return {"message": f"Database '{_get_db_name()}' cleared"}
 
 
 @router.post("/backup")
-async def backup_database(request: BackupRequest):
+async def backup_database(request: BackupRequest) -> dict[str, str]:
     """Backup the current database to a new database."""
     current_db = _get_db_name()
     target_db = request.backup_to or f"akeneo_{secrets.token_hex(4)}"
@@ -100,7 +100,7 @@ async def backup_database(request: BackupRequest):
 
 
 @router.post("/restore")
-async def restore_database(request: RestoreRequest):
+async def restore_database(request: RestoreRequest) -> dict[str, str]:
     """Restore the current database from a backup."""
     current_db = _get_db_name()
     source_db = request.restore_from

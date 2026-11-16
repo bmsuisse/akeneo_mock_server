@@ -7,7 +7,7 @@ from typing import Any
 
 import psycopg
 from psycopg import sql
-from psycopg.rows import dict_row
+from psycopg.rows import DictRow, dict_row
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field, model_validator
 
@@ -19,7 +19,7 @@ _known_databases: set[str] = set()
 db_name_var: ContextVar[str | None] = ContextVar("db_name", default=None)
 
 
-def get_db_url():
+def get_db_url() -> str:
     base_url = os.environ.get("AKENEO_DATABASE_URL", "postgresql://akeneo:akeneo@localhost:54327/akeneo")
     db_name = db_name_var.get()
 
@@ -34,7 +34,7 @@ def get_db_url():
     return base_url
 
 
-def get_admin_url():
+def get_admin_url() -> str:
     base_url = os.environ.get("AKENEO_DATABASE_URL", "postgresql://akeneo:akeneo@localhost:54327/akeneo")
     if "/" in base_url:
         prm_part = base_url.split("?")[1] if "?" in base_url else ""
@@ -43,14 +43,14 @@ def get_admin_url():
     return base_url
 
 
-def _get_db_name():
+def _get_db_name() -> str:
     db_name = db_name_var.get()
     if db_name is None:
         db_name = get_db_url().rsplit("/", 1)[-1].split("?")[0]
     return db_name
 
 
-def ensure_db_exists(db_name: str):
+def ensure_db_exists(db_name: str) -> None:
     if db_name in _known_databases:
         return
 
@@ -130,7 +130,7 @@ def destroy_all_databases() -> list[str]:
     return dropped
 
 
-def get_connection():
+def get_connection() -> psycopg.Connection[DictRow]:
     conn = psycopg.connect(get_db_url(), row_factory=dict_row)
     return conn
 
@@ -461,7 +461,7 @@ SUB_MODELS = {
 }
 
 
-def init_db():
+def init_db() -> None:
     retries = 10
     conn = None
     while retries > 0:
@@ -493,21 +493,21 @@ def get_db() -> Generator[psycopg.Connection, None, None]:
 
 # Helper for Session-like behavior if needed, but we'll use raw connections.
 class SessionShim:
-    def __init__(self, conn: psycopg.Connection):
+    def __init__(self, conn: psycopg.Connection) -> None:
         self.conn = conn
 
-    def exec(self, query: Any):
+    def exec(self, query: Any) -> None:
         # This will be updated to handle sqlglot queries
         pass
 
-    def add(self, item: Any):
+    def add(self, item: Any) -> None:
         pass
 
-    def commit(self):
+    def commit(self) -> None:
         self.conn.commit()
 
-    def rollback(self):
+    def rollback(self) -> None:
         self.conn.rollback()
 
-    def close(self):
+    def close(self) -> None:
         self.conn.close()

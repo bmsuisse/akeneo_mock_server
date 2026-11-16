@@ -7,7 +7,7 @@ from akeneo_mock_server.app import app
 client = TestClient(app)
 
 
-def test_product_update_with_attribute_not_in_family_should_fail():
+def test_product_update_with_attribute_not_in_family_should_fail() -> None:
     """A product update should fail if an attribute is not part of the product's family"""
     family_code = "test-family-1"
     attr_code_1 = "attr-in-family"
@@ -45,7 +45,7 @@ def test_product_update_with_attribute_not_in_family_should_fail():
     assert r.status_code == 422, f"Expected 422, got {r.status_code}: {r.text}"
 
 
-def test_products_uuid_update_with_attribute_not_in_family_should_fail():
+def test_products_uuid_update_with_attribute_not_in_family_should_fail() -> None:
     """A products-uuid update should fail if an attribute is not part of the product's family"""
     family_code = "test-family-2"
     attr_code_1 = "attr-in-family-2"

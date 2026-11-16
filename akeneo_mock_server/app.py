@@ -1,5 +1,5 @@
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -7,6 +7,7 @@ import psycopg
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.responses import Response
 
 from akeneo_mock_server.common import PatchTypeError
 from akeneo_mock_server.database import close_db_pool, db_name_var
@@ -46,7 +47,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Mock Akeneo API", lifespan=app_lifespan)
 
     @app.middleware("http")
-    async def db_name_middleware(request: Request, call_next):
+    async def db_name_middleware(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         db_name = request.headers.get("X-AkeneoMockDB")
         token = db_name_var.set(db_name)
         try:
@@ -55,7 +56,7 @@ def create_app() -> FastAPI:
             db_name_var.reset(token)
 
     @app.middleware("http")
-    async def body_cache_middleware(request: Request, call_next):
+    async def body_cache_middleware(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         await request.body()
         try:
             return await call_next(request)

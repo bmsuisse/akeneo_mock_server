@@ -5,7 +5,7 @@ from akeneo_mock_server.app import app
 client = TestClient(app)
 
 
-def test_create_family_with_non_existing_attribute_as_label():
+def test_create_family_with_non_existing_attribute_as_label() -> None:
     response = client.post(
         "/api/rest/v1/families", json={"code": "family_label_fail", "attribute_as_label": "non_existing_label_attr"}
     )
@@ -13,7 +13,7 @@ def test_create_family_with_non_existing_attribute_as_label():
     assert "non_existing_label_attr" in response.text
 
 
-def test_create_family_with_non_existing_attribute_as_image():
+def test_create_family_with_non_existing_attribute_as_image() -> None:
     response = client.post(
         "/api/rest/v1/families", json={"code": "family_image_fail", "attribute_as_image": "non_existing_image_attr"}
     )
@@ -21,7 +21,7 @@ def test_create_family_with_non_existing_attribute_as_image():
     assert "non_existing_image_attr" in response.text
 
 
-def test_create_family_with_existing_attributes():
+def test_create_family_with_existing_attributes() -> None:
     # 1. Create attribute
     client.post("/api/rest/v1/attributes", json={"code": "existing_attr", "type": "pim_catalog_text"})
 
@@ -33,7 +33,7 @@ def test_create_family_with_existing_attributes():
     assert response.status_code == 201
 
 
-def test_bulk_patch_family_with_non_existing_attribute():
+def test_bulk_patch_family_with_non_existing_attribute() -> None:
     response = client.patch(
         "/api/rest/v1/families",
         headers={"Content-Type": "application/vnd.akeneo.collection+json"},

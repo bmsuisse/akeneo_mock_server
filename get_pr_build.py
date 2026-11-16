@@ -5,7 +5,7 @@ import re
 import subprocess
 
 
-def run_command(command, capture_output=True):
+def run_command(command: str, capture_output: bool = True) -> str | None:
     if capture_output:
         result = subprocess.run(command, capture_output=True, text=True, shell=True)
         if result.returncode != 0:
@@ -15,10 +15,11 @@ def run_command(command, capture_output=True):
                 print(result.stderr)
             return None
         return result.stdout.strip()
-    return subprocess.call(command, shell=True)
+    subprocess.call(command, shell=True)
+    return None
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Get latest PR build logs")
     parser.add_argument("--wait", action="store_true", help="Wait for the run to complete if it is pending")
     args = parser.parse_args()
